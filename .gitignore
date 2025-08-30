@@ -173,5 +173,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Directorios de datos
 data/
 joined_data/
+clean_data/
