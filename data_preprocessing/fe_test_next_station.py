@@ -1,3 +1,4 @@
+import os
 import pandas as pd, numpy as np
 from pathlib import Path
 import math
@@ -356,9 +357,9 @@ def build_folium_trace_map(route, lat0, lon0, debug_list, station_names=None,
 # =========================
 # Próxima estación teórica con continuidad
 # =========================
-def compute_next_for_trip(
-    trip: pd.DataFrame,
-    trip_stable_start_row: pd.Series,   # fila de trip_routes (tiene LINEA, DIR, idx_start, etc.)
+def compute_next_for_segment(
+    segment: pd.DataFrame,
+    segment_stable_start_row: pd.Series,   # fila de trip_routes (tiene LINEA, DIR, idx_start, etc.)
     geoms: dict,
     stations_by_key: dict,
     win_confirm_pts: int = 8,           # ~ventana corta para confirmar VUELTA
@@ -377,19 +378,19 @@ def compute_next_for_trip(
     - NO mezcla estaciones de IDA y VUELTA en un mismo 's_est' (cada DIR tiene su marco).
     - Antes de idx_start, rellena con la primera próxima estación calculada en idx_start.
     """
-    out = trip.copy()
+    out = segment.copy()
 
     # 1) Desde dónde es válido este trip:
-    stable_start_index = int(trip_stable_start_row.get("idx_start", 0)) if trip_stable_start_row is not None else 0
+    stable_start_index = int(segment_stable_start_row.get("idx_start", 0)) if segment_stable_start_row is not None else 0
     if stable_start_index < 0 or stable_start_index >= len(out):
         stable_start_index = 0
 
     work = out.iloc[stable_start_index:].copy().reset_index(drop=False)  # guarda índice original en 'index'
 
     # 2) Ruta activa inicial (según inferencia)
-    linea = trip_stable_start_row.get("LINEA")
-    dir0  = trip_stable_start_row.get("DIR")
-    
+    linea = segment_stable_start_row.get("LINEA")
+    dir0  = segment_stable_start_row.get("DIR")
+
     if pd.isna(linea) or pd.isna(dir0):
         # Sin línea o dir inferidas, devuelve NaN/None
         out["s_m"] = np.nan
@@ -620,11 +621,6 @@ def load_line_polyline_csv(csv_path):
 
     return geoms, stations_by_key
 
-UNIT = "u204"
-CLEAN_TRIPS_CSV = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\clean_data\\{UNIT}\\{UNIT}_clean_trips.csv"
-ROUTES_CSV      = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_preprocessing\\tests\\{UNIT}\\{UNIT}_trip_routes_test.csv"
-DEBUG_HTML_PATH = None
-
 def station_s_on_route(route, lat, lon):
     x, y = ll_to_xy_m(lat, lon, route["lat0"], route["lon0"])
     rx, ry, rc = route["rx"], route["ry"], route["route_cum"]
@@ -657,41 +653,116 @@ for line in LINES:
     g, s = load_line_polyline_csv(path)
     geoms.update(g)
     stations_by_key.update(s)
-
-df = pd.read_csv(CLEAN_TRIPS_CSV, dtype={"trip_id": str})
-df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
-df = df.sort_values(["trip_id","Fecha"])
-route_scores_df = pd.read_csv(ROUTES_CSV, dtype={"trip_id": str})
-
-# Agrupa por trip_id
-for tid, trip in df.groupby("trip_id", sort=False):
-    trip_id = tid
-    print(f"--- Procesando trip {trip_id} ---")
-    trip_scores = route_scores_df[route_scores_df["trip_id"] == trip_id]
     
-    # Obtener la línea asignada a este trip
-    if trip_scores.empty:
-        print(f"Trip {trip_id} sin línea asignada en {ROUTES_CSV}, se omite.")
-        continue
+# --- Ejecución principal ---
+
+def process_unit_next_station(unit):
     
-    line = trip_scores["LINEA"].iloc[0]
-    if pd.isna(line) or line not in LINES:
-        print(f"Trip {trip_id} con línea inválida '{line}', se omite.")
-        continue
+    print(f'-- Procesando unidad {unit} --')
+    
+    all_results = []  # acumular todos los segmentos procesados
+    
+    UNIT = unit
+    CLEAN_TRIPS_CSV = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\clean_data\\{UNIT}\\{UNIT}_clean_trips.csv"
+    TRIPS_VITERBI = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{UNIT}\\{UNIT}_trips_with_viterbi.csv"
+    DEBUG_HTML_PATH = None
 
-    result = compute_next_for_trip(
-        trip=trip,  # df del trip (ordenado por Fecha)
-        trip_stable_start_row=trip_scores.iloc[0] if not trip_scores.empty else pd.Series(),
-        geoms=geoms,
-        stations_by_key=stations_by_key,
-        win_confirm_pts=8,           # ajustable
-        eps_end_m=20.0,              # tolerancia para “final de ruta”
-        dist_margin=20.0,            # margen de cercanía a ruta opuesta
-        min_progress_confirm=200.0,  # progreso mínimo en ventana para confirmar cambio
-        dist_thresh=200.0,
-        frac_within=0.75,
-        debug_html_path=None
-    )
+    df = pd.read_csv(CLEAN_TRIPS_CSV, dtype={"trip_id": str})
+    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
+    df = df.sort_values(["trip_id","Fecha"])
+    trips_viterbi_df = pd.read_csv(TRIPS_VITERBI, dtype={"trip_id": str})
+    
+    for trip_id, trip in df.groupby("trip_id", sort=False):
+        segs = trips_viterbi_df[trips_viterbi_df["trip_id"] == trip_id].copy()
+        if segs.empty:
+            print(f"Trip {trip_id} sin segmentos en {TRIPS_VITERBI}, se omite.")
+            continue
 
+        # Asegurar tipos enteros
+        for c in ["idx_start", "idx_end", "t_start", "t_end", "dur_pts"]:
+            if c in segs.columns:
+                segs[c] = segs[c].astype(float).astype(int)
 
-    result.to_csv(f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_preprocessing\\tests\\{UNIT}\\{UNIT}_trip_{trip_id}_with_next_station.csv", index=False)
+        # Orden lógico de bloques
+        segs = segs.sort_values(["t_start", "idx_start"])
+
+        # Procesar bloque por bloque
+        for blk_id, seg in enumerate(segs.itertuples(index=False), start=1):
+            linea = seg.LINEA
+            dir_init = getattr(seg, "DIR_init", None)
+            if pd.isna(linea) or linea not in LINES:
+                print(f"• Bloque {blk_id}: línea inválida '{linea}', se salta.")
+                continue
+            if dir_init is None:
+                print(f"• Bloque {blk_id}: sin DIR_init, se salta.")
+                continue
+
+            i0 = int(seg.idx_start)
+            i1 = int(seg.idx_end)
+
+            # subset del trip original para este bloque
+            # (como idx_start/idx_end son índices reales del DataFrame original)
+            seg_df = trip.loc[i0:i1].copy()
+            if seg_df.empty:
+                print(f"• Bloque {blk_id}: ventana {i0}-{i1} vacía, se salta.")
+                continue
+
+            # construir una “fila de estado inicial” con el nombre de columna que espera compute_next_for_trip
+            start_row = pd.Series({
+                "LINEA": linea,
+                "DIR": dir_init,
+                "idx_start": i0,
+                "idx_end": i1
+            })
+
+            res = compute_next_for_segment(
+                segment=seg_df,
+                segment_stable_start_row=start_row,
+                geoms=geoms,
+                stations_by_key=stations_by_key,
+                win_confirm_pts=8,
+                eps_end_m=20.0,
+                dist_margin=20.0,
+                min_progress_confirm=200.0,
+                dist_thresh=200.0,
+                frac_within=0.75,
+                debug_html_path=None
+            )
+
+            # anotar metadatos del bloque
+            res = res.copy()
+            res["trip_id"] = trip_id
+            res["LINEA"] = linea
+            res["DIR_init"] = dir_init
+            res["block_id"] = blk_id
+            res["idx_start_blk"] = i0
+            res["idx_end_blk"] = i1
+
+            all_results.append(res)
+
+    # Guardar concatenado
+    if all_results:
+        final_df = pd.concat(all_results, ignore_index=True)
+        out_path = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{UNIT}\\{UNIT}_trips_with_next_station.csv"
+        import os; os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        final_df.to_csv(out_path, index=False)
+        print(f"Resultados guardados en: {out_path}")
+    else:
+        print("No hubo resultados para guardar.")
+        
+if __name__ == "__main__":
+    print('=== Iniciando inferencia de próxima estación ===')
+    # Encontrar todas las unidades (carpetas en data with features)
+    DATA_WITH_FEATURES_DIR = Path("D:/2025/UVG/Tesis/repos/backend/data_with_features")
+    if not DATA_WITH_FEATURES_DIR.exists():
+        print(f"No existe el directorio {DATA_WITH_FEATURES_DIR}. Fin.")
+    units = [p.name for p in DATA_WITH_FEATURES_DIR.iterdir() if p.is_dir() and p.name != "maps"]
+    if not units:
+        print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.")
+    for unit in units:
+        # Si ya existe el archivo de salida, omitir
+        """ out_csv = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{unit}\\{unit}_trips_with_next_station.csv"
+        if os.path.exists(out_csv):
+            print(f"El archivo {out_csv} ya existe. Se omite la unidad {unit}.")
+            continue """
+        process_unit_next_station(unit)

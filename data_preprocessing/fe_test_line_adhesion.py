@@ -1,3 +1,4 @@
+import os
 import pandas as pd, numpy as np
 from pathlib import Path
 import math
@@ -50,51 +51,6 @@ def project_point_to_polyline(px, py, rx, ry, route_cum):
     i  = int(np.argmin(d))
     return float(d[i]), float(s[i])
 
-# Encontrar el primer punto adherido a la línea
-def find_first_adherent_index(dist_m, s_m,
-                              distance_thresh_m=200.0,
-                              min_points=8,
-                              min_progress_m=600.0,
-                              max_backtrack_m=80.0,
-                              window_points=None,
-                              frac_within=0.8,
-                              route_length=None,
-                              is_circular=False):
-    
-    if window_points is None: window_points = min_points
-    n = len(dist_m)
-    
-    def diffs_forward(s):
-        ds = np.diff(s)
-        if is_circular and (route_length is not None) and (route_length > 0):
-            wrap_mask = ds < -0.5*route_length
-            ds = np.where(wrap_mask, ds + route_length, ds)
-        return ds
-    
-    def good(i0, i1):
-        d = dist_m[i0:i1]; s = s_m[i0:i1]
-        inside = np.isfinite(d) & (d <= distance_thresh_m)
-        
-        if inside.size == 0 or np.mean(inside) < frac_within: return False
-        
-        s_ok = np.isfinite(s)
-        if not np.any(s_ok): return False
-        
-        s2 = s[s_ok]
-        ds = diffs_forward(s2)
-        back = np.maximum(0.0, -ds)
-        
-        if np.any(back > max_backtrack_m): return False
-        prog = float(np.nanmax(s2) - np.nanmin(s2))
-        return prog >= min_progress_m
-    
-    for start in range(0, n - window_points + 1):
-        if good(start, start + window_points):
-            j = start + window_points
-            while j < n and good(start, j): j += 1
-            return start, j - 1
-    return None, None
-
 # Proyectar el trip a un candidato (línea, dirección)
 def snap_trip_to_route(lat, lon, route):
     px, py = ll_to_xy_m(lat, lon, route["lat0"], route["lon0"])
@@ -103,49 +59,6 @@ def snap_trip_to_route(lat, lon, route):
     dist_m = np.fromiter((p[0] for p in pairs), dtype=float, count=len(pairs))
     s_m    = np.fromiter((p[1] for p in pairs), dtype=float, count=len(pairs))
     return dist_m, s_m
-
-# Métricas de adhesión por cada candidato del trip
-def adhesion_metrics_for_candidate(lat, lon, route,
-                                   DIST_THRESH_M=200.0,
-                                   MIN_POINTS=6,
-                                   MIN_PROGRESS_M=200.0,
-                                   MAX_BACKTRACK_M=80.0,
-                                   FRAC_WITHIN=0.8,
-                                   ts=None,
-                                   idx=None):
-    dist_m, s_m = snap_trip_to_route(lat, lon, route)
-    t0, t1 = find_first_adherent_index(dist_m, s_m,
-                                       distance_thresh_m=DIST_THRESH_M,
-                                       min_points=MIN_POINTS,
-                                       min_progress_m=MIN_PROGRESS_M,
-                                       max_backtrack_m=MAX_BACKTRACK_M,
-                                       frac_within=FRAC_WITHIN,
-                                       route_length=route["length_m"],
-                                       is_circular=route["is_circular"])
-    if t0 is None:
-        return None  # no hay adhesión sostenida
-    
-    run = slice(t0, t1+1)
-    mean_dev = float(np.nanmean(dist_m[run]))
-    frac_in  = float(np.mean(dist_m[run] <= DIST_THRESH_M))
-    progress = float(np.nanmax(s_m[run]) - np.nanmin(s_m[run]))
-    dur_pts  = int(t1 - t0 + 1)
-    
-    result = dict(t_start=t0, t_end=t1, mean_dev=mean_dev,
-                frac_in=frac_in, progress=progress, dur_pts=dur_pts,
-                route_len=route["length_m"])
-    
-    # timestamps e índices originales
-    if ts is not None:
-        ts = pd.to_datetime(ts, errors="coerce")
-        result["t_start_ts"] = ts.iloc[t0]
-        result["t_end_ts"]   = ts.iloc[t1]
-    if idx is not None:
-        idx = np.asarray(idx)
-        result["idx_start"] = int(idx[t0])
-        result["idx_end"]   = int(idx[t1])
-
-    return result
 
 def load_line_polyline_csv(csv_path):
     df = pd.read_csv(csv_path)
@@ -191,6 +104,139 @@ def load_line_polyline_csv(csv_path):
         geoms[(linea, d)] = route
         
     return geoms
+
+# Intento de uso con viterbi:
+
+import numpy as np
+import pandas as pd
+
+def build_emission_costs(lat, lon, states, geoms, Dmax=120.0):
+    """
+    states: lista de claves (line, dir)
+    return: costs (N,K), also keep per-state s_m/dist_m if lo necesitas luego
+    """
+    N = len(lat); K = len(states)
+    costs = np.full((N, K), 1e9, float)
+    s_by_state = [None]*K
+    d_by_state = [None]*K
+    for k, key in enumerate(states):
+        route = geoms.get(key)
+        if route is None: continue
+        dist_m, s_m = snap_trip_to_route(lat, lon, route)
+        # emisión robusta: capear distancia
+        c = np.minimum(dist_m, Dmax)
+        costs[:, k] = c*c
+        s_by_state[k] = s_m
+        d_by_state[k] = dist_m
+    return costs, s_by_state, d_by_state
+
+def near_terminal_mask(route, s_arr, window_m=50.0):
+    if route is None or s_arr is None: 
+        return np.zeros_like(s_arr, dtype=bool)
+    return (route["length_m"] - s_arr) <= window_m  # cerca del final
+
+def viterbi_path(costs, switch_penalty=60.0, dyn_penalty=None):
+    """
+    costs: (N,K)
+    dyn_penalty: callable(i, j, s) -> penalización extra por cambiar de j->s en i (puede ser 0)
+    """
+    N, K = costs.shape
+    dp = np.empty((N, K), float); dp[0] = costs[0]
+    prev = np.full((N, K), -1, int)
+    for i in range(1, N):
+        # trans base: penaliza cambiar; 0 si se queda
+        K = costs.shape[1]
+        # matriz KxK: costo de venir de cada estado j a cada estado s
+        base = np.repeat(dp[i-1][:, None], K, axis=1) + switch_penalty  # (K,K)
+        # quedarse en el mismo estado NO paga penalización de cambio
+        base[np.arange(K), np.arange(K)] = dp[i-1]                      # diag = dp[i-1]
+
+        if dyn_penalty is not None:
+            base = base + dyn_penalty(i)  # suma (K,K) -> (K,K)
+        j_best = np.argmin(base, axis=0)     # mejor origen para cada destino s
+        dp[i] = costs[i] + base[j_best, np.arange(K)]
+        prev[i] = j_best
+    path = np.empty(N, int)
+    path[-1] = int(np.argmin(dp[-1]))
+    for i in range(N-1, 0, -1):
+        path[i-1] = prev[i, path[i]]
+    return path
+
+def sequence_to_segments(path, min_pts=8, min_progress=300.0, s_by_state=None, states=None):
+    """
+    Colapsa el path en segmentos y filtra cortos o con poco progreso.
+    """
+    N = len(path)
+    segs = []
+    i0 = 0
+    for i in range(1, N+1):
+        if i==N or path[i] != path[i-1]:
+            k = path[i-1]
+            i1 = i-1
+            keep = True
+            if (i1 - i0 + 1) < min_pts: 
+                keep = False
+            if keep and s_by_state is not None:
+                s = s_by_state[k]
+                if s is not None:
+                    prog = float(np.nanmax(s[i0:i1+1]) - np.nanmin(s[i0:i1+1]))
+                    if prog < min_progress:
+                        keep = False
+            if keep:
+                line, d = states[k] if states else (None, None)
+                segs.append({"state_k": int(k), "LINEA": line, "DIR": d, "i0": int(i0), "i1": int(i1)})
+            i0 = i
+    return pd.DataFrame(segs)
+
+def segment_trip_with_viterbi(trip_df, geoms, shortlist_states, params=None):
+    """
+    trip_df: DataFrame de 1 trip ordenado por Fecha (tiene Latitud/Longitud)
+    shortlist_states: lista de (line, dir) permitidos para este día/trip
+    params: dict opcional
+    """
+    P = dict(Dmax=120.0, switch_penalty=60.0, term_window=50.0,
+             min_pts=8, min_progress=300.0)
+    if params: P.update(params)
+
+    lat = trip_df["Latitud"].to_numpy(float)
+    lon = trip_df["Longitud"].to_numpy(float)
+
+    costs, s_by_state, _ = build_emission_costs(lat, lon, shortlist_states, geoms, Dmax=P["Dmax"])
+
+    # penalización dinámica: bajar costo de cambio solo cerca de terminales
+    routes = [geoms.get(st) for st in shortlist_states]
+    near_end_flags = [near_terminal_mask(rt, s_by_state[i], P["term_window"]) if s_by_state[i] is not None else None
+                      for i, rt in enumerate(routes)]
+
+    def dyn_penalty(i):
+        # matriz KxK con extras por cambiar de j->s en i
+        K = len(shortlist_states)
+        extra = np.zeros((K, K), float)
+        for j in range(K):
+            for s in range(K):
+                if j == s: 
+                    continue
+                # por defecto: nada
+                scale = 1.0
+                # si estoy cerca del final del estado j, bajar penalización
+                flag = (near_end_flags[j][i] if (near_end_flags[j] is not None and i < len(near_end_flags[j])) else False)
+                if flag:
+                    scale = 0.3  # permite el cambio
+                # si cambio entre IDA<->VUELTA de la MISMA línea: solo barato cerca de terminal
+                lj, dj = shortlist_states[j]
+                ls, ds = shortlist_states[s]
+                if lj == ls and (dj, ds) in {("IDA","VUELTA"), ("VUELTA","IDA")}:
+                    # si NO estoy en terminal, subir un poco la penalización
+                    if not flag:
+                        scale = 1.2
+                extra[j, s] = (scale - 1.0) * P["switch_penalty"]
+        return extra
+
+    path = viterbi_path(costs, switch_penalty=P["switch_penalty"], dyn_penalty=dyn_penalty)
+    segs = sequence_to_segments(path, min_pts=P["min_pts"], min_progress=P["min_progress"],
+                                s_by_state=s_by_state, states=shortlist_states)
+    return segs, path
+
 
 # Visualizar resultados
 # Graficar la polilínea del inicio de cada viaje con folium
@@ -255,6 +301,8 @@ FRAC_WITHIN     = 0.9    # % de puntos dentro del umbral en la ventana
 
 def add_line_feature(unit):
     
+    print(f'--- Procesando unidad {unit} ---')
+    
     # Constantes de unidad y líneas
     UNIT = unit
     TRIPS_CSV = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\clean_data\\{UNIT}\\{UNIT}_clean_trips.csv"
@@ -270,9 +318,9 @@ def add_line_feature(unit):
         return
     
     # Trip específico para pruebas
-    """ df = trips_df[trips_df["trip_id"] == 6]
+    """ df = trips_df[trips_df["trip_id"] == 1]
     if df.empty:
-        print(f"El trip_id '6' no existe en {TRIPS_CSV}. Fin.")
+        print(f"El trip_id '1' no existe en {TRIPS_CSV}. Fin.")
         return """
     
     # Cargar geometrías de todas las líneas
@@ -281,6 +329,7 @@ def add_line_feature(unit):
         path = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_preprocessing\\complete_lines\\{line}_with_direction.csv"
         geoms.update(load_line_polyline_csv(path))
         
+    # Analizar cada trip por separado
     rows = []
     for tid, g in trips_df.groupby("trip_id", sort=False):
         g = g.sort_values("Fecha")
@@ -291,128 +340,176 @@ def add_line_feature(unit):
         idx = g.index                         # índices reales en df
         
         # Preselección de rutas a probar:
-        cand_list = None
+        cand_list = []
 
         if 'SAN RAFAEL' in unique_stations_visited or 'PARAÍSO' in unique_stations_visited:
-            cand_list = [ (key, 0, 0, 0) for key in geoms.keys() if key[0].strip().casefold() == 'Linea_18-B'.casefold()]
-            if 'CEJUSA ANDÉN SUR' in unique_stations_visited or 'JOCOTENANGO' in unique_stations_visited or 'CENTRO ZONA 6' in unique_stations_visited or 'EXPOSICIÓN' in unique_stations_visited:
-                continue # si hay estaciones de otras líneas, omite este trip (multi-línea probable)
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_18-b'.casefold() ]
             
-        elif 'ATLÁNTIDA' in unique_stations_visited:
-            cand_list = [ (key, 0, 0, 0) for key in geoms.keys() if key[0].strip().casefold() == 'Linea_18-A'.casefold()]
-            if 'CEJUSA ANDÉN SUR' in unique_stations_visited or 'JOCOTENANGO' in unique_stations_visited or 'CENTRO ZONA 6' in unique_stations_visited or 'EXPOSICIÓN' in unique_stations_visited:
-                continue # si hay estaciones de otras líneas, omite este trip (multi-línea probable)
+        if 'ATLÁNTIDA' in unique_stations_visited:
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_18-a'.casefold() ]
 
-        elif 'CEJUSA ANDÉN SUR' in unique_stations_visited:
-            cand_list = [ (key, 0, 0, 0) for key in geoms.keys() if key[0].strip().casefold() == 'Linea_7'.casefold()]
-            if 'JOCOTENANGO' in unique_stations_visited or 'CENTRO ZONA 6' in unique_stations_visited or 'EXPOSICIÓN' in unique_stations_visited:
-                continue # si hay estaciones de otras líneas, omite este trip (multi-línea probable)
+        if 'CEJUSA ANDÉN SUR' in unique_stations_visited:
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_7'.casefold()]
 
-        elif 'JOCOTENANGO' in unique_stations_visited:
-            cand_list = [ (key, 0, 0, 0) for key in geoms.keys() if key[0].strip().casefold() == 'Linea_2'.casefold()]
-            if 'CENTRO ZONA 6' in unique_stations_visited or 'EXPOSICIÓN' in unique_stations_visited:
-                continue # si hay estaciones de otras líneas, omite este trip (multi-línea probable)
+        if 'JOCOTENANGO' in unique_stations_visited:
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_2'.casefold()]
 
-        elif 'CENTRO ZONA 6' in unique_stations_visited:
-            cand_list = [ (key, 0, 0, 0) for key in geoms.keys() if key[0].strip().casefold() == 'Linea_6'.casefold()]
-            if 'EXPOSICIÓN' in unique_stations_visited:
-                continue # si hay estaciones de otras líneas, omite este trip (multi-línea probable)
+        if 'CENTRO ZONA 6' in unique_stations_visited:
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_6'.casefold()]
+            
+        if 'SAN AGUSTIN' in unique_stations_visited:
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_1'.casefold()]
+            
+        if 'PLAZA BERLÍN' in unique_stations_visited or 'JUAN PABLO II' in unique_stations_visited or 'PLAZA ARGENTINA' in unique_stations_visited:
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_13-b'.casefold()]
 
-        elif 'EXPOSICIÓN' in unique_stations_visited:
-            cand_list = [ (key, 0, 0, 0) for key in geoms.keys() if key[0].strip().casefold() == 'Linea_13-A'.casefold()] + [ (key, 0, 0, 0) for key in geoms.keys() if key[0].strip().casefold() == 'Linea_13-B'.casefold()]
-
-        # si no hay shortlist, prueba TODAS las rutas (puede ser más lento)
+        if 'EXPOSICIÓN' in unique_stations_visited or 'TERMINAL' in unique_stations_visited or 'INDUSTRIA' in unique_stations_visited or 'TIVOLI' in unique_stations_visited or 'TORRE DEL REFORMADOR' in unique_stations_visited or 'SEIS 26' in unique_stations_visited:
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_13-a'.casefold()]
+            
+        # Fallback: estaciones de Línea 12 (estaciones compartidas por otras líneas)
+        if not cand_list and ('DON BOSCO' in unique_stations_visited or 'TRÉBOL' in unique_stations_visited or 'EL CARMEN' in unique_stations_visited):
+            cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_12'.casefold()]
+            
+        # si no hay shortlist, prueba TODAS las rutas (menos preciso)
         if not cand_list:
-            cand_list = [ (key, 0, 0, 0) for key in geoms.keys() ]
+            cand_list = [ key for key in geoms.keys() ]
             
-        scored = []
-        for (linea, d), _, _, _ in cand_list:
-            route = geoms.get((linea, d))
-            if route is None: 
-                continue
-            
-            min_points = MIN_POINTS
-            min_progress = MIN_PROGRESS_M
-            max_backtrack = MAX_BACKTRACK_M
-            
-            # AJUSTE PARA CASOS ESPECIALES (mucho ruido)
-            # rutas muy cortas: relaja mínimo de puntos y distancia mínima
-            if len(route["rx"]) < MIN_POINTS:
-                min_points = len(route["rx"])
-                min_progress = 300
-                max_backtrack = 150
-                
-            
-            met = adhesion_metrics_for_candidate(lat, lon, route,
-                                                DIST_THRESH_M, min_points, min_progress,
-                                                max_backtrack, FRAC_WITHIN, ts=ts, idx=idx)
-            if met is None:
-                continue
+        shortlist_states = list(dict.fromkeys(cand_list))  # quita duplicados, conserva orden
 
-            # Score adhesión:
-            #   - mucha duración y progreso (normalizado por largo ruta)
-            #   - alta fracción dentro del umbral
-            #   - poca desviación promedio
-            #   - inicio temprano favorecido
-            dur = met["dur_pts"]
-            prog_norm = met["progress"]
-            score = (2.5*prog_norm) + (1.5*met["frac_in"]) + (0.5*dur/len(lat)) - (met["mean_dev"]/DIST_THRESH_M) - (0.3*met["t_start"]/max(len(lat),1))
+        # --- corre Viterbi sobre todo el trip ---
+        params = dict(Dmax=120.0, switch_penalty=60.0, term_window=50.0,
+                    min_pts=8, min_progress=300.0)
+        segs, path = segment_trip_with_viterbi(g, geoms, shortlist_states, params=params)
 
-            scored.append({
-                "trip_id": tid, "LINEA": linea, "DIR": d,
-                "t_start": met["t_start"], "t_end": met["t_end"],
-                "t_start_ts": met.get("t_start_ts"), "t_end_ts": met.get("t_end_ts"),
-                "idx_start": met.get("idx_start"), "idx_end": met.get("idx_end"),
-                "progress_m": met["progress"], "mean_dev_m": met["mean_dev"],
-                "frac_in": met["frac_in"], "dur_pts": dur, "score": float(score)
-            })
-
-        if scored:
-            scored.sort(key=lambda r: (r["LINEA"], r["DIR"]))
-            best_by_line = {}
-            for r in scored:
-                key = r["LINEA"]
-                if key not in best_by_line:
-                    best_by_line[key] = r
-                else:
-                    # si es la misma línea, favorece el inicio más temprano
-                    cur = best_by_line[key]
-                    if (r["t_start"] < cur["t_start"]):
-                        best_by_line[key] = r
-                        
-            best = max(best_by_line.values(), key=lambda r: r["score"])
-            rows.append(best)
-        else:
+        """ if segs.empty:
+            # si no se formó ningún segmento “estable”, deja fila nula (como antes)
             rows.append({"trip_id": tid, "LINEA": None, "DIR": None,
                         "t_start": None, "t_start_ts": None, "idx_start": None,
                         "t_end": None, "t_end_ts": None, "idx_end": None,
                         "progress_m": 0.0, "mean_dev_m": np.nan,
                         "frac_in": 0.0, "dur_pts": 0, "score": -1e9})
+            continue """
+        
+        # 1) Mapas de estado -> LINEA/DIR, y “paths” por muestra
+        state2line = np.array([st[0] for st in shortlist_states], dtype=object)
+        state2dir  = np.array([st[1] for st in shortlist_states], dtype=object)
 
-    route_scores_df = pd.DataFrame(rows)
+        line_path = state2line[path]   # LÍNEA por punto
+        dir_path  = state2dir[path]    # DIR por punto (solo para elegir DIR inicial del bloque)
+
+        # 2) Colapsar runs por LÍNEA (ignorando DIR)
+        def collapse_runs(vals):
+            segs_line = []
+            i0 = 0
+            for i in range(1, len(vals)+1):
+                if i == len(vals) or vals[i] != vals[i-1]:
+                    segs_line.append((vals[i-1], i0, i-1))
+                    i0 = i
+            return segs_line
+
+        runs_line = collapse_runs(line_path)
+
+        # 3) Histéresis mínima por LÍNEA para filtrar chispazos
+        min_pts_line = 50
+        runs_line = [(ln,i0,i1) for (ln,i0,i1) in runs_line if (i1 - i0 + 1) >= min_pts_line]
+
+        # 4) DIR inicial del bloque: mayoría en una ventana inicial
+        W = 40  # ajusta
+        def pick_dir_init(i0, i1):
+            j1 = min(i1, i0 + W - 1)
+            sub = dir_path[i0:j1+1]
+            if len(sub) == 0:
+                return None
+            vals, cnts = np.unique(sub, return_counts=True)
+            return str(vals[np.argmax(cnts)])
+
+        # 5) Generar filas “solo cambios de LÍNEA” (con DIR_init)
+        previous_line = None
+        for (ln, i0, i1) in runs_line:
+            if ln == previous_line:
+                continue
+            previous_line = ln
+            rows.append({
+                "trip_id": tid,
+                "LINEA": ln,
+                "DIR_init": pick_dir_init(i0, i1),  # solo para arrancar tu módulo de siguiente estación
+                "t_start": float(i0),
+                "t_end": float(i1),
+                "t_start_ts": ts.iloc[i0],
+                "t_end_ts": ts.iloc[i1],
+                "idx_start": int(idx[i0]),
+                "idx_end": int(idx[i1]),
+                "dur_pts": int(i1 - i0 + 1)
+            })
+            
+        # --- convierte segmentos (i0,i1) a índices y métricas ---
+        # prepara emisiones por estado para medir mean_dev/frac_in/progreso
+        """ costs, s_by_state, d_by_state = build_emission_costs(lat, lon, shortlist_states, geoms, Dmax=params["Dmax"])
+
+        for _, seg in segs.iterrows():
+            k = int(seg["state_k"])
+            line_k, dir_k = shortlist_states[k]
+            i0, i1 = int(seg["i0"]), int(seg["i1"])
+            # mapea a índice/timestamp original
+            idx_start = int(idx[i0]); idx_end = int(idx[i1])
+            t_start_ts = ts.iloc[i0]; t_end_ts = ts.iloc[i1]
+
+            s_seg = s_by_state[k][i0:i1+1]
+            d_seg = d_by_state[k][i0:i1+1]
+            progress = float(np.nanmax(s_seg) - np.nanmin(s_seg)) if s_seg.size else 0.0
+            mean_dev = float(np.nanmean(d_seg)) if d_seg.size else np.nan
+            # fracción dentro del umbral de “pegado”
+            inside_mask = np.isfinite(d_seg)
+            frac_in = float(np.mean(d_seg[inside_mask] <= DIST_THRESH_M)) if np.any(inside_mask) else 0.0
+
+            rows.append({
+                "trip_id": tid, "LINEA": line_k, "DIR": dir_k,
+                "t_start": i0, "t_end": i1,
+                "t_start_ts": t_start_ts, "t_end_ts": t_end_ts,
+                "idx_start": idx_start, "idx_end": idx_end,
+                "progress_m": progress, "mean_dev_m": mean_dev,
+                "frac_in": frac_in, "dur_pts": int(i1 - i0 + 1),
+                # un score sencillo por si quieres priorizar
+                "score": float(2.5*progress + 1.5*frac_in - mean_dev/DIST_THRESH_M)
+            }) """
     
-    # Ordenar resultados por trip_id numéricamente
-    route_scores_df["trip_id_num"] = pd.to_numeric(route_scores_df["trip_id"], errors="coerce")
-    route_scores_df = route_scores_df.sort_values("trip_id_num").drop(columns=["trip_id_num"])
+        # Debug: guardar path_df
+        """ state_names = [f"{l}|{d}" for (l,d) in shortlist_states]
+        path_df = pd.DataFrame({
+            "trip_id": tid,
+            "index": idx.values,
+            "Fecha": ts.values,
+            "state_k": path,
+            "state_name": [state_names[k] for k in path]
+        }) """
+        
+        """ OUT_CSV = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_preprocessing\\tests\\{UNIT}\\{UNIT}_trip_{tid}_viterbi_path.csv"
+        
+        # Crear carpeta si no existe
+        import os
+        os.makedirs(os.path.dirname(OUT_CSV), exist_ok=True)
+
+        path_df.to_csv(OUT_CSV, index=False) """
 
     # Guardar resultados
-    OUT_CSV = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_preprocessing\\tests\\{UNIT}\\{UNIT}_trip_routes_test.csv"
+    trips_with_viterbi = pd.DataFrame(rows)
+    
+    # Ordenar por trip_id y t_start
+    trips_with_viterbi = trips_with_viterbi.sort_values(["trip_id","t_start"])
+
+    OUT_CSV = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{UNIT}\\{UNIT}_trips_with_viterbi.csv"
 
     # Crear carpeta si no existe
     import os
     os.makedirs(os.path.dirname(OUT_CSV), exist_ok=True)
 
-    route_scores_df.to_csv(OUT_CSV, index=False)
+    trips_with_viterbi.to_csv(OUT_CSV, index=False)
     
-    # Guardar trips con t_start > 300 (muy probables de ser multi-línea)
-    multiline_trips = route_scores_df[route_scores_df["t_start"] > 300]
-    OUT_MULTI_CSV = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_preprocessing\\tests\\{UNIT}\\{UNIT}_multiline_trips_test.csv"
-    multiline_trips.to_csv(OUT_MULTI_CSV, index=False)
     
-    print(f"Resultados guardados en: {OUT_CSV} y {OUT_MULTI_CSV}")
+    print(f"Resultados guardados en: {OUT_CSV}")
     
     # Visualizar resultados
-    """ for _, row in route_scores_df.iterrows():
+    """ for _, row in trips_with_viterbi.iterrows():
         if pd.isna(row["LINEA"]):
             print(f"Trip {row['trip_id']}: No se encontró línea candidata.")
             continue
@@ -432,6 +529,21 @@ def add_line_feature(unit):
         outfile = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_preprocessing\\tests\\{UNIT}\\trip_{tid}_line_{row['LINEA']}_dir_{row['DIR']}.html"
         plot_trip_with_adherence(g_trip, met, outfile=outfile) """
 
-# Ejecución de prueba
-UNIT = 'u204'
-add_line_feature(UNIT)
+# --- Ejecución principal ---
+
+if __name__ == "__main__":
+    print('=== Iniciando procesamiento de líneas con Viterbi ===')
+    # Encontrar todas las unidades (carpetas en clean_data)
+    CLEAN_DATA_DIR = Path("D:/2025/UVG/Tesis/repos/backend/clean_data")
+    if not CLEAN_DATA_DIR.exists():
+        print(f"No existe el directorio {CLEAN_DATA_DIR}. Fin.")
+    units = [p.name for p in CLEAN_DATA_DIR.iterdir() if p.is_dir() and p.name != "maps"]
+    if not units:
+        print(f"No se encontraron unidades en {CLEAN_DATA_DIR}. Fin.")
+    for unit in units:
+        # Si ya existe el archivo de salida, omitir
+        out_csv = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{unit}\\{unit}_trips_with_viterbi.csv"
+        if os.path.exists(out_csv):
+            print(f"El archivo {out_csv} ya existe. Se omite la unidad {unit}.")
+            continue
+        add_line_feature(unit)

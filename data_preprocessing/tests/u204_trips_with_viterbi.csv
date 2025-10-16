@@ -1,0 +1,3 @@
+trip_id,LINEA,DIR_init,t_start,t_end,t_start_ts,t_end_ts,idx_start,idx_end,dur_pts
+146,Linea_1,CIRCULAR,24.0,495.0,2024-03-01 05:30:24,2024-03-01 11:21:36,53576,54047,472
+146,Linea_6,IDA,1024.0,1209.0,2024-03-01 17:17:16,2024-03-01 19:48:26,54576,54761,186
