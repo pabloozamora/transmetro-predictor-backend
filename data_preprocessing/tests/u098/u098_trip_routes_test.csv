@@ -1,0 +1,2 @@
+trip_id,LINEA,DIR,t_start,t_end,t_start_ts,t_end_ts,idx_start,idx_end,progress_m,mean_dev_m,frac_in,dur_pts,score
+14,Linea 18-A,VUELTA,45,72,2024-01-18 04:43:57,2024-01-18 05:04:53,16183,16210,2178.163928193537,35.60565982714052,0.8214285714285714,28,5446.286319283968

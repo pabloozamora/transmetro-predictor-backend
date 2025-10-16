@@ -1,0 +1,75 @@
+kml_file,type,name,order,lat,lon,station,dir
+doc.kml,LineString,Línea 1,0,14.6277515,-90.5148792,,CIRCULAR
+doc.kml,LineString,Línea 1,1,14.627789,-90.5150486
+doc.kml,LineString,Línea 1,2,14.6278551,-90.5152033
+doc.kml,LineString,Línea 1,3,14.6280101,-90.5154132
+doc.kml,LineString,Línea 1,4,14.6283708,-90.515731
+doc.kml,LineString,Línea 1,5,14.6287303,-90.5160716
+doc.kml,LineString,Línea 1,6,14.6289898,-90.5162889
+doc.kml,LineString,Línea 1,7,14.6291287,-90.5163868
+doc.kml,LineString,Línea 1,8,14.6292098,-90.5164237
+doc.kml,LineString,Línea 1,9,14.6292987,-90.5164418
+doc.kml,LineString,Línea 1,10,14.6295829,-90.5164659
+doc.kml,LineString,Línea 1,11,14.6299086,-90.5164311
+doc.kml,LineString,Línea 1,12,14.6305963,-90.5163667
+doc.kml,LineString,Línea 1,13,14.6309843,-90.5163131
+doc.kml,LineString,Línea 1,13,14.631351132520283,-90.51626080905473,SUR 2,CIRCULAR
+doc.kml,LineString,Línea 1,14,14.6315488,-90.5162165
+doc.kml,LineString,Línea 1,15,14.6330239,-90.5160211
+doc.kml,LineString,Línea 1,16,14.6337602,-90.5159167
+doc.kml,LineString,Línea 1,17,14.634499,-90.5158391,GÓMEZ CARRILLO,CIRCULAR
+doc.kml,LineString,Línea 1,18,14.6354843,-90.5157085
+doc.kml,LineString,Línea 1,19,14.6360029,-90.5156472
+doc.kml,LineString,Línea 1,20,14.6365448,-90.5155618
+doc.kml,LineString,Línea 1,21,14.6385257,-90.5152952,SAN AGUSTÍN,CIRCULAR
+doc.kml,LineString,Línea 1,22,14.6420826,-90.5148271,PARQUE CENTENARIO,CIRCULAR
+doc.kml,LineString,Línea 1,23,14.6443065,-90.5145139
+doc.kml,LineString,Línea 1,24,14.6459952,-90.5142947
+doc.kml,LineString,Línea 1,24,14.645808291325139,-90.51310090781153,SAN SEBASTIÁN,CIRCULAR
+doc.kml,LineString,Línea 1,25,14.6457325,-90.5126866
+doc.kml,LineString,Línea 1,26,14.6454821,-90.5111015
+doc.kml,LineString,Línea 1,27,14.6450925,-90.5111494
+doc.kml,LineString,Línea 1,28,14.6446562,-90.5112108
+doc.kml,LineString,Línea 1,29,14.6438614,-90.5113174
+doc.kml,LineString,Línea 1,30,14.6422667,-90.5115307,MERCADO CENTRAL,CIRCULAR
+doc.kml,LineString,Línea 1,31,14.6421759,-90.5115401
+doc.kml,LineString,Línea 1,32,14.6421512,-90.511469
+doc.kml,LineString,Línea 1,33,14.6419449,-90.5114999
+doc.kml,LineString,Línea 1,34,14.6414279,-90.5115763
+doc.kml,LineString,Línea 1,35,14.6409459,-90.5116432
+doc.kml,LineString,Línea 1,36,14.6409498,-90.5117117
+doc.kml,LineString,Línea 1,37,14.6407979,-90.5117385
+doc.kml,LineString,Línea 1,38,14.6400142,-90.5118491,CORREOS,CIRCULAR
+doc.kml,LineString,Línea 1,39,14.6391994,-90.5119544
+doc.kml,LineString,Línea 1,40,14.6383845,-90.5120657
+doc.kml,LineString,Línea 1,41,14.637628,-90.5121784
+doc.kml,LineString,Línea 1,42,14.6369896,-90.5122629
+doc.kml,LineString,Línea 1,43,14.6363524,-90.5123554
+doc.kml,LineString,Línea 1,44,14.6354519,-90.5124822
+doc.kml,LineString,Línea 1,45,14.6345916,-90.5125875
+doc.kml,LineString,Línea 1,46,14.6337307,-90.5127075,BEATAS DE BELÉN,CIRCULAR
+doc.kml,LineString,Línea 1,47,14.6328788,-90.5128315
+doc.kml,LineString,Línea 1,48,14.6314722,-90.5130314
+doc.kml,LineString,Línea 1,49,14.6302462,-90.5132582
+doc.kml,LineString,Línea 1,50,14.6302132,-90.513264
+doc.kml,LineString,Línea 1,51,14.630052,-90.5133041
+doc.kml,LineString,Línea 1,52,14.6299661,-90.5133161
+doc.kml,LineString,Línea 1,52,14.629847282148086,-90.51333722314364,PASEO DE LAS LETRAS,CIRCULAR
+doc.kml,LineString,Línea 1,53,14.6278609,-90.513604
+doc.kml,LineString,Línea 1,54,14.6275611,-90.5136402
+doc.kml,LineString,Línea 1,55,14.6275731,-90.513768
+doc.kml,LineString,Línea 1,56,14.6275722,-90.5138877
+doc.kml,LineString,Línea 1,57,14.6275647,-90.5139457
+doc.kml,LineString,Línea 1,58,14.6275377,-90.5140122
+doc.kml,LineString,Línea 1,59,14.627469,-90.5141273
+doc.kml,LineString,Línea 1,60,14.6273782,-90.5142397
+doc.kml,LineString,Línea 1,61,14.6274024,-90.5142598
+doc.kml,LineString,Línea 1,62,14.6274564,-90.5142692
+doc.kml,LineString,Línea 1,63,14.6274955,-90.5142866
+doc.kml,LineString,Línea 1,64,14.6275307,-90.514304
+doc.kml,LineString,Línea 1,65,14.6276128,-90.5143724
+doc.kml,LineString,Línea 1,66,14.6276382,-90.5144012
+doc.kml,LineString,Línea 1,67,14.6276637,-90.5144408
+doc.kml,LineString,Línea 1,68,14.6277032,-90.5145444
+doc.kml,LineString,Línea 1,69,14.6277193,-90.5146506
+doc.kml,LineString,Línea 1,70,14.6277515,-90.5148792,CENTRO CÍVICO,CIRCULAR
