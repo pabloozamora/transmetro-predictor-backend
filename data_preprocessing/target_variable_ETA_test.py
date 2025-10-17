@@ -1,15 +1,14 @@
+# eta_proxima_est.py
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Iterable, Optional, Tuple, Sequence
-from math import radians, cos, sin, asin, sqrt
+from typing import Iterable, Optional, Tuple
 
-# ---------------------------
-# Utilidades para "ETA ancla"
-# ---------------------------
-
-# Detectar bloques consecutivos donde la proxima_est_teorica no cambia
 def _runs_of_equal(series: pd.Series) -> Iterable[Tuple[int, int, int]]:
+    """
+    Devuelve runs de valores iguales sobre la serie (ya ordenada), como tuplas (run_id, start_idx_rel, end_idx_rel).
+    Los índices devueltos son relativos al inicio de la serie (0..n-1).
+    """
     vals = series.astype("string").fillna("<NA>").values
     n = len(vals)
     if n == 0:
@@ -24,350 +23,177 @@ def _runs_of_equal(series: pd.Series) -> Iterable[Tuple[int, int, int]]:
         out.append((int(rid), int(idxs[0]), int(idxs[-1])))
     return out
 
-# Determina el índice de llegada a la proxima_est_teorica para un run dado
+
 def _arrival_index_for_run(
     i_run: int,
-    runs: Sequence[Tuple[int,int,int]],
+    runs: Iterable[Tuple[int,int,int]],
     dist_vals: np.ndarray,
     arrival_thresh: float,
     persist_n: int
 ) -> Tuple[Optional[int], str]:
-    # Si hay run siguiente, toma el inicio del primer run futuro “estable” cuya longitud ≥ persist_n
+    """
+    Determina el índice (relativo al grupo) donde se considera que se llega a la estación del run i_run.
+    Estrategia:
+      1) Si existe un run futuro con la siguiente estación, se usa el inicio del primer run "estable"
+         (longitud >= persist_n si persist_n>0; si persist_n==0, el inmediato).
+      2) Si es el último run, se usa el primer índice dentro del run con dist <= arrival_thresh.
+    Retorna (arrival_idx_rel, arrival_source).
+    """
+    # Caso con siguiente run: llegar cuando cambia la proxima_est_teorica
     if i_run + 1 < len(runs):
         if persist_n > 0:
+            # Buscar el primer run futuro con longitud >= persist_n
             target_rel = None
             for j in range(i_run+1, len(runs)):
                 _, a_j, b_j = runs[j]
                 if (b_j - a_j + 1) >= persist_n:
-                    target_rel = a_j
+                    target_rel = a_j  # inicio del run estable
                     break
+            # Si no hay ninguno estable, usa el inmediato
             if target_rel is None:
                 target_rel = runs[i_run+1][1]
             return target_rel, "change"
         else:
             return runs[i_run+1][1], "change"
 
-    # Si es el último run: busca la primera muestra con dist_a_prox_m ≤ arrival_thresh
-    _, a, b = runs[i_run]
+    # Último run: usar umbral de distancia
+    rid, a, b = runs[i_run]
     local = dist_vals[a:b+1]
     mask = (local <= arrival_thresh)
     if mask.any():
         return a + int(np.where(mask)[0][0]), "threshold"
     return None, "none"
 
-# Por cada grupo (trip_id, block_id), fragmentado en runs de proxima_est_teorica constante,
-# asigna ETA como tiempo hasta la llegada (cambio o umbral de distancia)
-def _eta_anchor_for_group(
+
+def _compute_eta_for_group(
     g: pd.DataFrame,
-    tcol: Optional[str],
     arrival_thresh: float,
     persist_n: int
 ) -> pd.DataFrame:
+    """
+    Calcula ETA_proxima_est para un grupo (un trip_id y opcionalmente block_id).
+    Devuelve DataFrame con mismas filas/índices que g y columnas:
+      - ETA_proxima_est_s
+      - arrival_source
+    """
     n = len(g)
     out = pd.DataFrame(index=g.index, data={
-        "ETA_proxima_est_s_anchor": np.full(n, np.nan, dtype=float),
+        "ETA_proxima_est_s": np.full(n, np.nan, dtype=float),
         "arrival_source": np.array(["none"] * n, dtype=object),
     })
+
     if n == 0:
         return out
 
     prox = g["proxima_est_teorica"]
     dist = g["dist_a_prox_m"].astype(float).values
-    
-    # Fragmentar en runs de proxima_est_teorica constante
     runs = list(_runs_of_equal(prox))
 
-    # Vector de tiempo (o índice si no hay tiempo)
-    if tcol:
-        t = g[tcol]
-    else:
-        t = pd.Series(np.arange(n, dtype=float), index=g.index)
+    # Vector de tiempo
+    t = g['Fecha']
 
     for i, (_, a, b) in enumerate(runs):
-        
-        # Obtener índice de llegada para este run
         arr_rel, src = _arrival_index_for_run(i, runs, dist, arrival_thresh, persist_n)
         if arr_rel is None:
             continue
 
-        # Calcular ETA ancla para el bloque [a:b] como t(arrival) - t(a:b)
-        if tcol:
-            arrival_time = t.iloc[arr_rel]
-            if pd.isna(arrival_time):
-                continue
-            eta_vals = (arrival_time - t.iloc[a:b+1]).dt.total_seconds().values
-        else:
-            arrival_time = t.iloc[arr_rel]
-            eta_vals = (arrival_time - t.iloc[a:b+1].values).astype(float)
+        # ETA = t(arrival) - t(k), para k in [a..b]
+        arrival_time = t.iloc[arr_rel]
+        # Si hay NaT, no asignamos
+        if pd.isna(arrival_time):
+            continue
+        eta_vals = (arrival_time - t.iloc[a:b+1]).dt.total_seconds().values
 
+        # Evitar valores negativos si hubiera desorden temporal
         eta_vals = np.where(eta_vals >= 0, eta_vals, np.nan)
 
-        out.loc[g.index[a:b+1], "ETA_proxima_est_s_anchor"] = eta_vals
+        out.loc[g.index[a:b+1], "ETA_proxima_est_s"] = eta_vals
         out.loc[g.index[a:b+1], "arrival_source"] = src
 
     return out
 
-# -------------------------------------
-# Velocidad robusta y ETA cinemática
-# -------------------------------------
 
-def _compute_speed_for_group(
-    g: pd.DataFrame,
-    s_col: str,
-    tcol: str,
-    back_tolerance_m: float = 20.0,
-    v_max_mps: float = 20.0,      # ~72 km/h (cap superior)
-    roll_win: int = 7,            # ventana mediana
-    ewm_halflife: float = 4.0     # suavizado exponencial
-) -> pd.DataFrame:
-    """
-    Calcula velocidad instantánea ds/dt y versiones suavizadas:
-      - speed_mps: instantánea robusta (clip y NaN si dt<=0)
-      - speed_mps_med: mediana rodante
-      - speed_mps_ewm: exponencial
-      - speed_mps_eff: combinación (prefiere mediana, sino ewm)
-    """
-    out = pd.DataFrame(index=g.index)
-
-    # Calcular velocidad instantánea (ds/dt)
-    s = g[s_col].astype(float)
-    dt = g[tcol].diff().dt.total_seconds()
-    ds = s.diff()
-
-    # Evitar retrocesos (ruido de proyección): tolera back_tolerance_m antes de anular
-    ds_clean = ds.where((ds >= -back_tolerance_m), np.nan)
-    ds_clean = ds_clean.clip(lower=0)  # no consumir distancia hacia atrás
-
-    v = ds_clean / dt
-    # Invalida si dt<=0 o v irreal
-    v = v.where((dt > 0), np.nan)
-    v = v.clip(upper=v_max_mps)
-
-    # Suavizados
-    
-    # Mediana rodante
-    v_med = v.rolling(roll_win, min_periods=max(2, roll_win//2)).median()
-    v_ewm = v.ewm(halflife=ewm_halflife, adjust=False, ignore_na=True).mean()
-
-    v_eff = v_med.combine_first(v_ewm)  # usa mediana si existe, sino ewm
-    # Relleno suave hacia atrás para pequeños huecos
-    v_eff = v_eff.fillna(method="ffill")
-
-    out["speed_mps"] = v
-    out["speed_mps_med"] = v_med
-    out["speed_mps_ewm"] = v_ewm
-    out["speed_mps_eff"] = v_eff
-    return out
-
-def _eta_kine_for_group(
-    g: pd.DataFrame, # Bloque de datos (misma próxima estación)
-    speed_cols: pd.DataFrame,
-    dist_col: str,
-    near_cap_radius_m: float = 120.0,
-    v_cap_near_station_mps: float = 4.0,  # ~14.4 km/h
-    v_min_operational_mps: float = 0.8,   # ~2.9 km/h (para evitar dividir por ~0)
-    dwell_time_s: float = 15.0,           # tiempo de parada estimado
-    min_valid_speed_pts: int = 3,
-    win_valid_pts: int = 7,
-    max_eta_s: float = 1800.0             # 30 min cap
-) -> pd.Series:
-    """
-    ETA cinemática: dist_a_prox_m / v_eff (con ajustes realistas cerca de la estación)
-      - Limita velocidad efectiva cerca de estación (cap) para modelar desaceleración
-      - Añade dwell (tiempo de parada) para evitar ETA=0 al tocar andén
-      - Rechaza casos con velocidad no confiable (pocos puntos válidos en ventana)
-    """
-    dist = g[dist_col].astype(float)
-    v_eff = speed_cols["speed_mps_eff"].copy()
-
-    # Cap de velocidad cuando estamos cerca de la estación
-    near = dist <= near_cap_radius_m
-    v_eff_adj = v_eff.where(~near, np.minimum(v_eff, v_cap_near_station_mps))
-
-    # Reglas de confiabilidad de velocidad
-    valid_mask = speed_cols["speed_mps"].notna()
-    valid_cnt = valid_mask.rolling(win_valid_pts, min_periods=1).sum()
-    speed_ok = (v_eff_adj >= v_min_operational_mps) & (valid_cnt >= min_valid_speed_pts)
-
-    # ETA base
-    eta = dist / v_eff_adj
-
-    # Invalida cinemática si no confiable
-    eta = pd.Series(eta, index=g.index)
-    eta = eta.where(speed_ok, np.nan)
-    
-    # Para aquellos puntos que se quedaron sin ETA (primer registro del grupo, velocidad no confiable),
-    # Rellenar con el siguiente válido hacia atrás (si existe) + la diferencia de tiempo entre estos registros
-    
-    g = g.sort_values("Fecha").copy()
-    dates = pd.to_datetime(g["Fecha"])
-    
-    eta_filled = eta.copy()
-    for i in range(len(eta)-2, -1, -1):
-        if pd.isna(eta_filled.iat[i]) and not pd.isna(eta_filled.iat[i+1]):
-            t_diff = (dates.iloc[i+1] - dates.iloc[i]).total_seconds()
-            eta_filled.iat[i] = eta_filled.iat[i+1] + t_diff
-                
-    eta = eta_filled
-    
-    # Si el tiempo estimado es muy grande, sustituirlo por NaN
-    eta = eta.where(eta <= max_eta_s, np.nan)
-    
-    return eta
-
-# -------------------------------------
-# Función principal (blend)
-# -------------------------------------
-def compute_eta_proxima_est_kinematic(
+def compute_eta_proxima_est(
     df: pd.DataFrame,
     group_cols: Tuple[str, ...] = ("trip_id","block_id"),
-    time_col: str = "Fecha",
-    s_col: str = "s_m",
-    dist_col: str = "dist_a_prox_m",
     arrival_thresh: float = 20.0,
     persist_n: int = 0,
-    # Velocidad
-    back_tolerance_m: float = 20.0,
-    v_max_mps: float = 20.0,
-    roll_win: int = 7,
-    ewm_halflife: float = 4.0,
-    # Mezcla
-    near_cap_radius_m: float = 120.0,
-    v_cap_near_station_mps: float = 4.0,
-    v_min_operational_mps: float = 0.8,
-    dwell_time_s: float = 15.0,
-    min_valid_speed_pts: int = 3,
-    win_valid_pts: int = 7,
-    max_eta_s: float = 1800.0,
+    sort_within_groups: bool = True
 ) -> pd.DataFrame:
     """
-    Devuelve DataFrame con columnas:
-      - speed_mps, speed_mps_med, speed_mps_ewm, speed_mps_eff
-      - ETA_proxima_est_s_kine
-      - ETA_proxima_est_s_anchor
-      - ETA_proxima_est_s_final
-      - ETA_proxima_est_min_final
-      - arrival_source
+    Calcula ETA_proxima_est y añade:
+      - ETA_proxima_est_s (segundos; NaN si no hay tiempo)
+      - ETA_proxima_est_min
+      - eta_available (True si ETA válido y >=0)
+      - arrival_source ("change" | "threshold" | "none")
+
+    Parámetros:
+      - group_cols: columnas para agrupar  p.ej. ("block_id", "trip_id")
+      - arrival_thresh: umbral en metros para “llegó” si es el último run del grupo.
+      - persist_n: histeresis en muestras para considerar válido el cambio de estación (0 = desactivado).
+      - sort_within_groups: si True, ordena por 'Fecha' dentro del grupo para garantizar monotonicidad temporal.
     """
     df = df.copy()
-    # Validación
-    needed = ["proxima_est_teorica", dist_col, s_col, time_col]
-    missing = [c for c in needed if c not in df.columns]
-    if missing:
-        raise ValueError(f"Faltan columnas: {missing}")
 
-    # Parseo tiempo y orden estable
-    df[time_col] = pd.to_datetime(df[time_col], errors="coerce")
-    real_groups = [c for c in group_cols if c in df.columns]
-    sort_cols = real_groups + [time_col]
+    # Validar columnas
+    for c in ("proxima_est_teorica","dist_a_prox_m"):
+        if c not in df.columns:
+            raise ValueError(f"Falta columna requerida: '{c}'")
+
+    # Determinar/parsear columna de tiempo
+    df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+
+    # Orden global suave para que groupby preserve orden relativo
+    sort_cols = ['trip_id', 'block_id', 'Fecha']
     df = df.sort_values(sort_cols, kind="mergesort").reset_index(drop=True)
     
-    # --- Partir por grupos de "proxima_est_teorica --- "
-    # para evitar mezclar segmentos entre viajes, bloques o direcciones.
-    part_cols = ["LINEA","DIR","DIR_init","trip_id","block_id","new_trip"]
+    result = _compute_eta_for_group(df, arrival_thresh, persist_n)
 
-    # Detecta cambio de partición (cambia cualquiera de estas columnas)
-    part_change = df[part_cols].ne(df[part_cols].shift()).any(axis=1)
+    # Adjuntar
+    df.loc[result.index, "ETA_proxima_est_s"] = result["ETA_proxima_est_s"].astype(float)
+    df["ETA_proxima_est_min"] = df["ETA_proxima_est_s"] / 60.0
+    df["eta_available"] = np.isfinite(df["ETA_proxima_est_s"]) & (df["ETA_proxima_est_s"] >= 0)
+    df.loc[result.index, "arrival_source"] = result["arrival_source"]
 
-    # Detecta cambio de estación próxima (tratando NaN de forma estable)
-    prox = df["proxima_est_teorica"].fillna("__NA__")
-    station_change = prox.ne(prox.shift())
-    
-    # ID de segmento consecutivo: sube cuando hay cambio de estación o de partición
-    df["segment_id"] = (part_change | station_change).cumsum()
-    
-    # Preasignar columnas de ancla en todo el DF
-    df["ETA_proxima_est_s_anchor"] = np.nan
-    df["arrival_source"] = "none"
+    return df
 
-    # 2) Calcular el ancla por partición completa (no por segmento)
-    for _, gpart in df.groupby(part_cols, sort=False):
-        anchor = _eta_anchor_for_group(
-            gpart, tcol=time_col, arrival_thresh=arrival_thresh, persist_n=persist_n
-        )
-        # mismo índice -> asignación directa
-        df.loc[gpart.index, ["ETA_proxima_est_s_anchor", "arrival_source"]] = \
-            anchor[["ETA_proxima_est_s_anchor", "arrival_source"]].values
-
-    # Procesar por segmento
-    results = []
-    for segment_id, g in df.groupby("segment_id"):
-        # Velocidad
-        sp = _compute_speed_for_group(
-            g, s_col=s_col, tcol=time_col,
-            back_tolerance_m=back_tolerance_m, v_max_mps=v_max_mps,
-            roll_win=roll_win, ewm_halflife=ewm_halflife
-        )
-
-        # ETA cinemática
-        eta_k = _eta_kine_for_group(
-            g, sp, dist_col=dist_col,
-            near_cap_radius_m=near_cap_radius_m,
-            v_cap_near_station_mps=v_cap_near_station_mps,
-            v_min_operational_mps=v_min_operational_mps,
-            dwell_time_s=dwell_time_s,
-            min_valid_speed_pts=min_valid_speed_pts,
-            win_valid_pts=win_valid_pts,
-            max_eta_s=max_eta_s
-        )
-        
-        out = g.copy()
-        out["ETA_proxima_est_s_kine"] = eta_k
-
-        # usa el ancla precomputado en df (mismo índice)
-        out["ETA_proxima_est_s_anchor"] = df.loc[g.index, "ETA_proxima_est_s_anchor"].values
-
-        # Blend: el menor (llegada más temprana)
-        eta_final = out["ETA_proxima_est_s_kine"].copy()
-        eta_final.where(
-            eta_final < out["ETA_proxima_est_s_anchor"],
-            out["ETA_proxima_est_s_anchor"],
-            inplace=True
-        )
-        out["ETA_proxima_est_s_final"] = eta_final
-        out["ETA_proxima_est_min_final"] = eta_final / 60.0
-
-        results.append(out)
-
-    return pd.concat(results, ignore_index=True)
-
-
-# ------------------------
-# Uso como script
-# ------------------------
-if __name__ == "__main__":
-    # Ejemplo de uso
-    UNIT = "u096"
-    in_path = Path(f"D:/2025/UVG/Tesis/repos/backend/data_with_features/{UNIT}/{UNIT}_trips_with_next_station.csv")
-    out_path = in_path.with_name(f"{UNIT}_trips_with_eta_kinematic.csv")
+def process_unit(unit):
+    UNIT = unit
+    # Cambia estas rutas según tus archivos
+    in_path = f'D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{UNIT}\\{UNIT}_trips_with_next_station.csv'
+    out_path = in_path
 
     df = pd.read_csv(in_path)
-    
-    # Probar con un solo trip
-    df = df[df["trip_id"] == 2].copy()
 
-    df_eta = compute_eta_proxima_est_kinematic(
+    df_eta = compute_eta_proxima_est(
         df,
         group_cols=("trip_id","block_id"),
-        time_col="Fecha",
-        s_col="dist_a_prox_m",   # usar dist_a_prox_m como s_m (distancia recorrida)
-        dist_col="dist_a_prox_m",
-        arrival_thresh=20.0,      # llegada si último run y dist<=20m
-        persist_n=2,              # histeresis de cambio (opcional)
-        # velocidad
-        back_tolerance_m=20.0,
-        v_max_mps=20.0,
-        roll_win=7,
-        ewm_halflife=4.0,
-        # mezcla y realismo cerca de estación
-        near_cap_radius_m=120.0,
-        v_cap_near_station_mps=4.0,
-        v_min_operational_mps=0.8,
-        dwell_time_s=15.0,
-        min_valid_speed_pts=3,
-        win_valid_pts=7,
-        max_eta_s=3600.0,
+        arrival_thresh=20.0,                # metros
+        persist_n=0,                        # sin histeresis
+        sort_within_groups=True
     )
 
     df_eta.to_csv(out_path, index=False)
-    print(f"Guardado: {out_path}")
+    print(f"Archivo guardado en: {out_path}")
+    
+# --- Ejecución principal ---
+if __name__ == "__main__":
+    print('=== Iniciando cálculo de variable objetivo (ETA) ===')
+    
+    # Encontrar todas las unidades (carpetas en data with features)
+    DATA_WITH_FEATURES_DIR = Path("D:/2025/UVG/Tesis/repos/backend/data_with_features")
+    if not DATA_WITH_FEATURES_DIR.exists():
+        print(f"No existe el directorio {DATA_WITH_FEATURES_DIR}. Fin.")
+    units = [p.name for p in DATA_WITH_FEATURES_DIR.iterdir() if p.is_dir() and p.name != "maps"]
+    
+    if not units:
+        print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.")
+        
+    for unit in units:
+        # Si ya existe el archivo de salida, omitir
+        """ out_csv = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{unit}\\{unit}_trips_with_next_station.csv"
+        if os.path.exists(out_csv):
+            print(f"El archivo {out_csv} ya existe. Se omite la unidad {unit}.")
+            continue """
+        print(f"--- Procesando unidad {unit} ---")
+        process_unit(unit)
