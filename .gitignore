@@ -178,3 +178,5 @@ data/
 joined_data/
 clean_data/
 data_with_features/
+compact_datasets/
+features_ready/

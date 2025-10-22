@@ -113,7 +113,7 @@ import pandas as pd
 def build_emission_costs(lat, lon, states, geoms, Dmax=120.0):
     """
     states: lista de claves (line, dir)
-    return: costs (N,K), also keep per-state s_m/dist_m if lo necesitas luego
+    return: costs (N,K), mantener per-state s_m/dist_m
     """
     N = len(lat); K = len(states)
     costs = np.full((N, K), 1e9, float)
@@ -318,7 +318,7 @@ def add_line_feature(unit):
         return
     
     # Trip específico para pruebas
-    """ df = trips_df[trips_df["trip_id"] == 1]
+    """ df = trips_df[trips_df["trip_id"] == 3]
     if df.empty:
         print(f"El trip_id '1' no existe en {TRIPS_CSV}. Fin.")
         return """
@@ -532,7 +532,7 @@ def add_line_feature(unit):
 # --- Ejecución principal ---
 
 if __name__ == "__main__":
-    print('=== Iniciando procesamiento de líneas con Viterbi ===')
+    """ print('=== Iniciando procesamiento de líneas con Viterbi ===')
     # Encontrar todas las unidades (carpetas en clean_data)
     CLEAN_DATA_DIR = Path("D:/2025/UVG/Tesis/repos/backend/clean_data")
     if not CLEAN_DATA_DIR.exists():
@@ -546,4 +546,6 @@ if __name__ == "__main__":
         if os.path.exists(out_csv):
             print(f"El archivo {out_csv} ya existe. Se omite la unidad {unit}.")
             continue
-        add_line_feature(unit)
+        add_line_feature(unit) """
+    unit = 'u204'
+    add_line_feature(unit)

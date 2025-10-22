@@ -555,12 +555,55 @@ def compute_next_for_segment(
     #    (recuerda que 'work' tiene la columna 'index' con el índice original)
     out.loc[work["index"], ["s_m","dist_m","proxima_est_teorica","dist_a_prox_m","DIR"]] = work[["s_m","dist_m","proxima_est_teorica","dist_a_prox_m","DIR"]].values
 
-    # 6) Antes del índice estable, usa la primera próxima estación del punto estable
+     # 6) Antes del índice estable:
+    #    - fija la próxima estación igual a la del primer punto estable,
+    #    - recalcula la DISTANCIA a esa estación con la posición real de cada punto previo.
     if stable_start_index > 0 and len(work) > 0:
-        first_est = work["proxima_est_teorica"].iloc[0]
-        first_dst = work["dist_a_prox_m"].iloc[0]
-        out.loc[out.index[:stable_start_index], "proxima_est_teorica"] = first_est
-        out.loc[out.index[:stable_start_index], "dist_a_prox_m"] = first_dst
+        # estación/dir confirmadas en el punto estable
+        first_est = str(work["proxima_est_teorica"].iloc[0]) if pd.notna(work["proxima_est_teorica"].iloc[0]) else None
+        start_dir = str(dir0)
+
+        # si falta info, no hacemos nada
+        if first_est is not None and (linea, start_dir) in geoms and (linea, start_dir) in stations_by_key:
+            route_start = geoms[(linea, start_dir)]
+            st_start = stations_by_key[(linea, start_dir)].sort_values("s_est")
+
+            # s_est de la estación objetivo
+            match = st_start.loc[st_start["station"] == first_est, "s_est"]
+            if not match.empty:
+                s_target = float(match.iloc[0])
+
+                # subset de puntos previos
+                pre_idx = out.index[:stable_start_index]
+                lat_pre = out.loc[pre_idx, "Latitud"].astype(float).to_numpy()
+                lon_pre = out.loc[pre_idx, "Longitud"].astype(float).to_numpy()
+
+                # proyecta puntos previos a la ruta de inicio (sin permitir switch)
+                s_pre, d_pre, _sw, cut_n, _done, _dbg = project_many_on_route(
+                    route_start, lat_pre, lon_pre,
+                    max_step_fwd=1200.0, back_tolerance=20.0,
+                    lam_back=1e-2, lam_fwd=1e-3, lam_idx=1e-4,
+                    switch_direction_in_same_station=False,
+                    current_global_index=stable_start_index - len(pre_idx)
+                )
+
+                # asegura longitud (por si cut_n < len)
+                s_pre = np.pad(s_pre, (0, max(0, len(pre_idx) - len(s_pre))), constant_values=np.nan)
+                d_pre = np.pad(d_pre, (0, max(0, len(pre_idx) - len(d_pre))), constant_values=np.nan)
+
+                # distancia a la estación objetivo (clamp mínimo 0 si ya la pasó numéricamente)
+                dist_to_target = np.maximum(0.0, s_target - s_pre)
+
+                # escribe resultados previos
+                out.loc[pre_idx, "proxima_est_teorica"] = first_est
+                out.loc[pre_idx, "DIR"] = start_dir
+                out.loc[pre_idx, "s_m"] = s_pre
+                out.loc[pre_idx, "dist_m"] = d_pre
+                out.loc[pre_idx, "dist_a_prox_m"] = dist_to_target
+            else:
+                # si no se encuentra la estación por nombre, al menos fija nombre/DIR
+                out.loc[out.index[:stable_start_index], "proxima_est_teorica"] = first_est
+                out.loc[out.index[:stable_start_index], "DIR"] = start_dir
 
     return out
 
@@ -667,10 +710,12 @@ def process_unit_next_station(unit):
     TRIPS_VITERBI = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{UNIT}\\{UNIT}_trips_with_viterbi.csv"
     DEBUG_HTML_PATH = None
 
-    df = pd.read_csv(CLEAN_TRIPS_CSV, dtype={"trip_id": str})
+    df = pd.read_csv(CLEAN_TRIPS_CSV, dtype={"trip_id": int})
+    
     df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
     df = df.sort_values(["trip_id","Fecha"])
-    trips_viterbi_df = pd.read_csv(TRIPS_VITERBI, dtype={"trip_id": str})
+    trips_viterbi_df = pd.read_csv(TRIPS_VITERBI, dtype={"trip_id": int})
+    
     
     for trip_id, trip in df.groupby("trip_id", sort=False):
         segs = trips_viterbi_df[trips_viterbi_df["trip_id"] == trip_id].copy()
@@ -699,10 +744,13 @@ def process_unit_next_station(unit):
 
             i0 = int(seg.idx_start)
             i1 = int(seg.idx_end)
+            
+            trip_index_start = seg.t_start
 
             # subset del trip original para este bloque
-            # (como idx_start/idx_end son índices reales del DataFrame original)
-            seg_df = trip.loc[i0:i1].copy()
+            # Esto se hace para viajes multilínea
+            seg_df = df.loc[i0:i1].copy()
+            
             if seg_df.empty:
                 print(f"• Bloque {blk_id}: ventana {i0}-{i1} vacía, se salta.")
                 continue
@@ -711,8 +759,7 @@ def process_unit_next_station(unit):
             start_row = pd.Series({
                 "LINEA": linea,
                 "DIR": dir_init,
-                "idx_start": i0,
-                "idx_end": i1
+                "idx_start": trip_index_start
             })
 
             res = compute_next_for_segment(
@@ -726,7 +773,7 @@ def process_unit_next_station(unit):
                 min_progress_confirm=200.0,
                 dist_thresh=200.0,
                 frac_within=0.75,
-                debug_html_path=None
+                debug_html_path=DEBUG_HTML_PATH
             )
 
             # anotar metadatos del bloque
@@ -760,9 +807,4 @@ if __name__ == "__main__":
     if not units:
         print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.")
     for unit in units:
-        # Si ya existe el archivo de salida, omitir
-        """ out_csv = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{unit}\\{unit}_trips_with_next_station.csv"
-        if os.path.exists(out_csv):
-            print(f"El archivo {out_csv} ya existe. Se omite la unidad {unit}.")
-            continue """
         process_unit_next_station(unit)

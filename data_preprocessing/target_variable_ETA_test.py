@@ -41,6 +41,14 @@ def _arrival_index_for_run(
     """
     # Caso con siguiente run: llegar cuando cambia la proxima_est_teorica
     if i_run + 1 < len(runs):
+        
+        # Ver si dentro del run actual ya se llegó a la estación (umbral de distancia)
+        rid, a, b = runs[i_run]
+        local = dist_vals[a:b+1]
+        mask = (local <= arrival_thresh)
+        if mask.any():
+            return a + int(np.where(mask)[0][0]), "threshold"
+        
         if persist_n > 0:
             # Buscar el primer run futuro con longitud >= persist_n
             target_rel = None
@@ -106,6 +114,10 @@ def _compute_eta_for_group(
 
         # Evitar valores negativos si hubiera desorden temporal
         eta_vals = np.where(eta_vals >= 0, eta_vals, np.nan)
+        
+        # Advertir de ETAs excesivamente grandes (>2 horas)
+        if np.any(eta_vals > 7200):
+            print(f"Advertencia: ETAs excesivamente grandes (>2 horas) en el trip {g['trip_id'].iloc[a]} - bloque {g['block_id'].iloc[a]}")
 
         out.loc[g.index[a:b+1], "ETA_proxima_est_s"] = eta_vals
         out.loc[g.index[a:b+1], "arrival_source"] = src
@@ -143,19 +155,25 @@ def compute_eta_proxima_est(
     # Determinar/parsear columna de tiempo
     df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
 
-    # Orden global suave para que groupby preserve orden relativo
-    sort_cols = ['trip_id', 'block_id', 'Fecha']
-    df = df.sort_values(sort_cols, kind="mergesort").reset_index(drop=True)
-    
-    result = _compute_eta_for_group(df, arrival_thresh, persist_n)
+    # Orden global estable para que los grupos mantengan coherencia visual,
+    # pero el cálculo real se hará por grupo:
+    df = df.sort_values(list(group_cols) + ['Fecha'], kind="mergesort").reset_index(drop=True)
 
-    # Adjuntar
-    df.loc[result.index, "ETA_proxima_est_s"] = result["ETA_proxima_est_s"].astype(float)
-    df["ETA_proxima_est_min"] = df["ETA_proxima_est_s"] / 60.0
-    df["eta_available"] = np.isfinite(df["ETA_proxima_est_s"]) & (df["ETA_proxima_est_s"] >= 0)
-    df.loc[result.index, "arrival_source"] = result["arrival_source"]
+    # Aplica por grupo
+    pieces = []
+    for _, g in df.groupby(list(group_cols), sort=False):
+        g_local = g.sort_values('Fecha', kind="mergesort") if sort_within_groups else g
+        res = _compute_eta_for_group(g_local, arrival_thresh, persist_n)
+        # Adjunta resultados al grupo original (mismas filas/índices)
+        g_local = g_local.copy()
+        g_local["ETA_proxima_est_s"] = res["ETA_proxima_est_s"].astype(float)
+        g_local["arrival_source"] = res["arrival_source"]
+        pieces.append(g_local)
 
-    return df
+    out = pd.concat(pieces, axis=0).sort_index()
+    out["ETA_proxima_est_min"] = out["ETA_proxima_est_s"] / 60.0
+    out["eta_available"] = np.isfinite(out["ETA_proxima_est_s"]) & (out["ETA_proxima_est_s"] >= 0)
+    return out
 
 def process_unit(unit):
     UNIT = unit
@@ -178,7 +196,7 @@ def process_unit(unit):
     
 # --- Ejecución principal ---
 if __name__ == "__main__":
-    print('=== Iniciando cálculo de variable objetivo (ETA) ===')
+    """ print('=== Iniciando cálculo de variable objetivo (ETA) ===')
     
     # Encontrar todas las unidades (carpetas en data with features)
     DATA_WITH_FEATURES_DIR = Path("D:/2025/UVG/Tesis/repos/backend/data_with_features")
@@ -190,10 +208,7 @@ if __name__ == "__main__":
         print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.")
         
     for unit in units:
-        # Si ya existe el archivo de salida, omitir
-        """ out_csv = f"D:\\2025\\UVG\\Tesis\\repos\\backend\\data_with_features\\{unit}\\{unit}_trips_with_next_station.csv"
-        if os.path.exists(out_csv):
-            print(f"El archivo {out_csv} ya existe. Se omite la unidad {unit}.")
-            continue """
         print(f"--- Procesando unidad {unit} ---")
-        process_unit(unit)
+        process_unit(unit) """
+    # Prueba con una unidad específica
+    process_unit("u204")
