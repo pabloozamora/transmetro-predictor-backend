@@ -11,18 +11,17 @@ def preprocess_check_eta_duration(df: pd.DataFrame) -> pd.DataFrame:
     
     outliers = df[df['ETA_proxima_est_s'] > high_duration_threshold]
     if not outliers.empty:
-        print(f"Advertencia: Se encontraron {len(outliers)} filas con duración mayor a {high_duration_threshold} segundos.")
-        print(outliers[['trip_id', 'block_id', 'ETA_proxima_est_s']])
+        print(f'Advertencia: Se encontraron duraciones de ETA extremadamente altas (> 7200 segundos) en el trip_id(s): {outliers["trip_id"].unique()}')
     
     return df
 
 # Cargar parquets
-FEATS_DIR = Path("features_ready")
-files = sorted(FEATS_DIR.glob("*_features.parquet"))
-assert files, "No hay archivos en features_ready/*.parquet"
+FEATS_DIR = Path("D:/2025/UVG/Tesis/repos/backend/compact_datasets/")
+files = sorted(FEATS_DIR.glob("*.parquet"))
+assert files, "No hay archivos en compact_datasets/*.parquet"
 
 # Cargar un parquet a la vez y preprocesar
 for file_path in files:
-    print(f"Cargando y preprocesando {file_path}...")
+    print(f"Procesando unidad: {file_path.name.split('_')[0]}")
     df = pd.read_parquet(file_path)
     df = preprocess_check_eta_duration(df)
