@@ -174,9 +174,12 @@ cython_debug/
 .pypirc
 
 # Directorios de datos
-data/
+raw_data/
 joined_data/
 clean_data/
 data_with_features/
 compact_datasets/
+compact_datasets_without_idle_rows/
 features_ready/
+features_ready_without_idle_rows/
+features_sampled_without_idle_rows/

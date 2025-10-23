@@ -115,9 +115,9 @@ def _compute_eta_for_group(
         # Evitar valores negativos si hubiera desorden temporal
         eta_vals = np.where(eta_vals >= 0, eta_vals, np.nan)
         
-        # Advertir de ETAs excesivamente grandes (>2 horas)
-        if np.any(eta_vals > 7200):
-            print(f"Advertencia: ETAs excesivamente grandes (>2 horas) en el trip {g['trip_id'].iloc[a]} - bloque {g['block_id'].iloc[a]}")
+        # Advertir de ETAs excesivamente grandes (>6 horas)
+        if np.any(eta_vals > 21600):
+            print(f"Advertencia: ETAs excesivamente grandes (>6 horas) en el trip {g['trip_id'].iloc[a]} - bloque {g['block_id'].iloc[a]}")
 
         out.loc[g.index[a:b+1], "ETA_proxima_est_s"] = eta_vals
         out.loc[g.index[a:b+1], "arrival_source"] = src
@@ -196,7 +196,7 @@ def process_unit(unit):
     
 # --- Ejecución principal ---
 if __name__ == "__main__":
-    """ print('=== Iniciando cálculo de variable objetivo (ETA) ===')
+    print('=== Iniciando cálculo de variable objetivo (ETA) ===')
     
     # Encontrar todas las unidades (carpetas en data with features)
     DATA_WITH_FEATURES_DIR = Path("D:/2025/UVG/Tesis/repos/backend/data_with_features")
@@ -209,6 +209,4 @@ if __name__ == "__main__":
         
     for unit in units:
         print(f"--- Procesando unidad {unit} ---")
-        process_unit(unit) """
-    # Prueba con una unidad específica
-    process_unit("u204")
+        process_unit(unit)
