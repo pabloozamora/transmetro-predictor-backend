@@ -1,0 +1,40 @@
+{
+  "final_rounds": 1604,
+  "params": {
+    "objective": "reg:squarederror",
+    "eval_metric": [
+      "mae",
+      "rmse"
+    ],
+    "learning_rate": 0.05,
+    "max_depth": 6,
+    "min_child_weight": 200,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.1,
+    "reg_lambda": 0.1,
+    "tree_method": "hist",
+    "max_bin": 255,
+    "random_state": 25
+  },
+  "feature_cols": [
+    "LINEA",
+    "DIR",
+    "proxima_est_teorica",
+    "dist_a_prox_m",
+    "dist_estacion_m",
+    "vel_mps",
+    "Altitud",
+    "s_m",
+    "dist_m",
+    "time_diff",
+    "dwell_same_xy_s",
+    "hour",
+    "dow",
+    "is_no_progress",
+    "progress_event",
+    "is_weekend",
+    "is_peak"
+  ],
+  "target_col": "ETA_proxima_est_s"
+}
