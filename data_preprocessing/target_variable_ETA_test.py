@@ -198,15 +198,16 @@ def process_unit(unit):
 if __name__ == "__main__":
     print('=== Iniciando cálculo de variable objetivo (ETA) ===')
     
-    # Encontrar todas las unidades (carpetas en data with features)
+    """ # Encontrar todas las unidades (carpetas en data with features)
     DATA_WITH_FEATURES_DIR = Path("D:/2025/UVG/Tesis/repos/backend/data_with_features")
     if not DATA_WITH_FEATURES_DIR.exists():
         print(f"No existe el directorio {DATA_WITH_FEATURES_DIR}. Fin.")
     units = [p.name for p in DATA_WITH_FEATURES_DIR.iterdir() if p.is_dir() and p.name != "maps"]
     
     if not units:
-        print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.")
+        print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.") """
         
+    units = ['u401', 'u402']
     for unit in units:
         print(f"--- Procesando unidad {unit} ---")
         process_unit(unit)

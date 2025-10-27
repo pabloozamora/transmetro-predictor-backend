@@ -348,7 +348,7 @@ def add_line_feature(unit):
         if 'ATLÁNTIDA' in unique_stations_visited:
             cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_18-a'.casefold() ]
 
-        if 'CEJUSA ANDÉN SUR' in unique_stations_visited:
+        if 'CEJUSA ANDÉN SUR ' in unique_stations_visited or 'CEJUSA ANDÉN NORTE' in unique_stations_visited or 'VILLA LINDA ANDÉN NORTE' in unique_stations_visited or 'VILLA LINDA ANDÉN SUR' in unique_stations_visited or 'ROOSEVELT ANDÉN NORTE' in unique_stations_visited or 'ROOSEVELT ANDÉN SUR' in unique_stations_visited:
             cand_list += [ key for key in geoms.keys() if key[0].strip().casefold() == 'linea_7'.casefold()]
 
         if 'JOCOTENANGO' in unique_stations_visited:
@@ -547,5 +547,6 @@ if __name__ == "__main__":
             print(f"El archivo {out_csv} ya existe. Se omite la unidad {unit}.")
             continue
         add_line_feature(unit) """
-    unit = 'u204'
-    add_line_feature(unit)
+    units = ['u401', 'u402']
+    for unit in units:
+        add_line_feature(unit)

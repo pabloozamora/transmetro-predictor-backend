@@ -111,8 +111,9 @@ if __name__ == "__main__":
     DATA_WITH_FEATURES_DIR = Path("D:/2025/UVG/Tesis/repos/backend/data_with_features")
     if not DATA_WITH_FEATURES_DIR.exists():
         print(f"No existe el directorio {DATA_WITH_FEATURES_DIR}. Fin.")
-    units = [p.name for p in DATA_WITH_FEATURES_DIR.iterdir() if p.is_dir() and p.name != "maps"]
+    #units = [p.name for p in DATA_WITH_FEATURES_DIR.iterdir() if p.is_dir() and p.name != "maps"]
     
+    units = ['u401', 'u402']
     if not units:
         print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.")
         

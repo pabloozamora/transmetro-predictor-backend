@@ -123,7 +123,7 @@ USE_ABS_PROGRESS    = True    # True: usa |Δs|
 
 # --- Ejecución principal ---
 if __name__ == "__main__":
-    print('=== Iniciando cálculo de tiempo de permanencia (dwell time) ===')
+    """ print('=== Iniciando cálculo de tiempo de permanencia (dwell time) ===')
     
     # Encontrar todas las unidades (carpetas en data with features)
     DATA_WITH_FEATURES_DIR = Path("D:/2025/UVG/Tesis/repos/backend/data_with_features")
@@ -132,7 +132,9 @@ if __name__ == "__main__":
     units = [p.name for p in DATA_WITH_FEATURES_DIR.iterdir() if p.is_dir() and p.name != "maps"]
     
     if not units:
-        print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.")
+        print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.") """
+        
+    units = ['u401', 'u402']
         
     for unit in units:
         print(f"--- Procesando unidad {unit} ---")

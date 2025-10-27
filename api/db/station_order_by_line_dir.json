@@ -1,0 +1,188 @@
+{
+  "Linea_12": {
+    "IDA": [
+      "CENMA",
+      "MONTE MARÍA",
+      "JAVIER",
+      "LAS CHARCAS DIRECCIÓN CENTRO",
+      "EL CARMEN",
+      "REFORMITA DIRECCIÓN CENTRO",
+      "MARISCAL DIRECCIÓN CENTRO",
+      "TRÉBOL DIRECCIÓN CENTRO",
+      "SANTA CECILIA",
+      "BOLÍVAR DIRECCIÓN CENTRO",
+      "DON BOSCO",
+      "PLAZA MUNICIPAL"
+    ],
+    "VUELTA": [
+      "PLAZA BARRIOS",
+      "EL AMATE",
+      "DON BOSCO",
+      "BOLÍVAR DIRECCIÓN CENMA",
+      "SANTA CECILIA",
+      "TRÉBOL",
+      "MARISCAL DIRECCIÓN CENMA",
+      "REFORMITA DIRECCIÓN CENMA",
+      "EL CARMEN",
+      "LAS CHARCAS DIRECCIÓN CENMA",
+      "JAVIER",
+      "MONTE MARÍA",
+      "CENMA"
+    ]
+  },
+  "Linea_13-A": {
+    "IDA": [
+      "HANGARES",
+      "PLAZA ARGENTINA",
+      "LOS ARCOS",
+      "PLAZA ESPAÑA",
+      "IGSS ZONA 9",
+      "SEIS 26",
+      "TORRE DEL REFORMADOR",
+      "PLAZA DE LA REPÚBLICA",
+      "CANTÓN EXPOSICIÓN",
+      "BANCO DE GUATEMALA",
+      "TIPOGRAFÍA"
+    ],
+    "VUELTA": [
+      "EL CALVARIO",
+      "4 GRADOS SUR",
+      "EXPOSICIÓN",
+      "TERMINAL",
+      "INDUSTRIA",
+      "TIVOLI",
+      "MONTÚFAR",
+      "ACUEDUCTO",
+      "FUERZA AÉREA",
+      "PLAZA ARGENTINA",
+      "HANGARES"
+    ]
+  },
+  "Linea_13-B": {
+    "IDA": [
+      "JUAN PABLO II",
+      "PLAZA ARGENTINA"
+    ],
+    "VUELTA": [
+      "PLAZA ARGENTINA",
+      "PLAZA BERLÍN"
+    ]
+  },
+  "Linea_18-A": {
+    "IDA": [
+      "ATLÁNTIDA",
+      "VICTORIAS",
+      "SAN MARTÍN DIRECCIÓN PLAZA BARRIOS",
+      "CAPUCHINAS",
+      "PLAZA BARRIOS/FEGUA",
+      "FRANCOS Y MONROY"
+    ],
+    "VUELTA": [
+      "COLÓN",
+      "CERRO DEL CARMEN",
+      "SAN MARTÍN DIRECCIÓN ATLÁNTIDA",
+      "VICTORIAS",
+      "PORTALES",
+      "ATLÁNTIDA"
+    ]
+  },
+  "Linea_18-B": {
+    "IDA": [
+      "SAN RAFAEL",
+      "PARAÍSO"
+    ],
+    "VUELTA": [
+      "PARAÍSO",
+      "SAN RAFAEL",
+      "ATLÁNTIDA"
+    ]
+  },
+  "Linea_1": {
+    "CIRCULAR": [
+      "SUR 2",
+      "GÓMEZ CARRILLO",
+      "SAN AGUSTÍN",
+      "PARQUE CENTENARIO",
+      "SAN SEBASTIÁN",
+      "MERCADO CENTRAL",
+      "CORREOS",
+      "BEATAS DE BELÉN",
+      "PASEO DE LAS LETRAS",
+      "CENTRO CÍVICO"
+    ]
+  },
+  "Linea_2": {
+    "IDA": [
+      "SAN SEBASTIÁN",
+      "SIMEÓN CAÑAS",
+      "HIPÓDROMO DEL NORTE"
+    ],
+    "VUELTA": [
+      "HIPÓDROMO DEL NORTE",
+      "SAN JOSÉ DE LA MONTAÑA",
+      "JOCOTENANGO"
+    ]
+  },
+  "Linea_6": {
+    "IDA": [
+      "PROYECTOS",
+      "PROYECTOS 4-4",
+      "CIPRESALES",
+      "QUINTANAL",
+      "CORPUS CHRISTI",
+      "JOSÉ MARTÍ",
+      "CERRO DEL CARMEN",
+      "SANTA TERESA",
+      "CAPUCHINAS",
+      "PLAZA BARRIOS/FEGUA",
+      "FRANCOS Y MONROY",
+      "COLÓN"
+    ],
+    "VUELTA": [
+      "CERRO DEL CARMEN",
+      "PARROQUIA",
+      "IGSS ZONA 6",
+      "CENTRO ZONA 6",
+      "ACADEMIA",
+      "CIPRESALES",
+      "PROYECTOS 4-4",
+      "PROYECTOS"
+    ]
+  },
+  "Linea_7": {
+    "IDA": [
+      "USAC PERIFÉRICO",
+      "GRANAI DIRECCIÓN LA MERCED",
+      "RODOLFO ROBLES DIRECCIÓN LA MERCED",
+      "CEJUSA DIRECCIÓN LA MERCED",
+      "SAN JORGE DIRECCIÓN LA MERCED",
+      "ROOSEVELT DIRECCIÓN LA MERCED",
+      "SAN JUAN DIRECCIÓN LA MERCED",
+      "CIUDAD DE PLATA II DIRECCIÓN LA MERCED",
+      "VILLA LINDA DIRECCIÓN LA MERCED",
+      "4 DE FEBRERO DIRECCIÓN LA MERCED",
+      "BETHANIA DIRECCIÓN LA MERCED",
+      "INCIENSO DIRECCIÓN LA MERCED",
+      "SAN JUAN DE DIOS",
+      "PASAJE AYCINENA",
+      "LA MERCED",
+      "CRUZ ROJA",
+      "ARCHIVO GENERAL",
+      "SANTUARIO DE GUADALUPE"
+    ],
+    "VUELTA": [
+      "INCIENSO DIRECCIÓN USAC",
+      "BETHANIA DIRECCIÓN USAC",
+      "4 DE FEBRERO DIRECCIÓN USAC",
+      "VILLA LINDA DIRECCIÓN USAC",
+      "CIUDAD DE PLATA DIRECCIÓN USAC",
+      "SAN JUAN DIRECCIÓN USAC",
+      "ROOSEVELT DIRECCIÓN USAC",
+      "SAN JORGE DIRECCIÓN USAC",
+      "CEJUSA DIRECCIÓN USAC",
+      "RODOLFO ROBLES DIRECCIÓN USAC",
+      "GRANAI DIRECCIÓN USAC",
+      "USAC PERIFÉRICO"
+    ]
+  }
+}
