@@ -35,7 +35,7 @@ def load_latest_data_per_unit(
         now = datetime.now(timezone(timedelta(hours=-6)))
         
         # Restar horas para simular diferentes momentos del día
-        now -= timedelta(hours=2)  # Ejemplo: simular 2 horas antes
+        now -= timedelta(hours=13)  # Ejemplo: simular 13 horas antes
 
     df = pd.read_parquet(DEMO_PATH)
     # Asegura tipos mínimos
