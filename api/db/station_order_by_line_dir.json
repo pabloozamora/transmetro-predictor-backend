@@ -59,13 +59,14 @@
     ]
   },
   "Linea_13-B": {
-    "IDA": [
-      "JUAN PABLO II",
-      "PLAZA ARGENTINA"
-    ],
+    
     "VUELTA": [
       "PLAZA ARGENTINA",
       "PLAZA BERLÍN"
+    ],
+    "IDA": [
+      "JUAN PABLO II",
+      "PLAZA ARGENTINA"
     ]
   },
   "Linea_18-A": {
@@ -87,14 +88,14 @@
     ]
   },
   "Linea_18-B": {
-    "IDA": [
-      "SAN RAFAEL",
-      "PARAÍSO"
-    ],
     "VUELTA": [
       "PARAÍSO",
       "SAN RAFAEL",
       "ATLÁNTIDA"
+    ],
+    "IDA": [
+      "SAN RAFAEL",
+      "PARAÍSO"
     ]
   },
   "Linea_1": {
@@ -112,15 +113,15 @@
     ]
   },
   "Linea_2": {
-    "IDA": [
-      "SAN SEBASTIÁN",
-      "SIMEÓN CAÑAS",
-      "HIPÓDROMO DEL NORTE"
-    ],
     "VUELTA": [
       "HIPÓDROMO DEL NORTE",
       "SAN JOSÉ DE LA MONTAÑA",
       "JOCOTENANGO"
+    ],
+    "IDA": [
+      "SAN SEBASTIÁN",
+      "SIMEÓN CAÑAS",
+      "HIPÓDROMO DEL NORTE"
     ]
   },
   "Linea_6": {

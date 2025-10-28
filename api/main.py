@@ -1,15 +1,34 @@
 from fastapi import FastAPI, HTTPException
-from schemes import PredictRequest, PredictResponse, TripRequest, TripResponse
+from fastapi.middleware.cors import CORSMiddleware
+from functools import lru_cache
+from schemes import PredictRequest, PredictResponse, TripRequest, TripResponse, StationEntry
 from models import load_model
 from predictions import get_closest_ETA_for_station, get_trip_duration_between_stations
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 import pandas as pd
 import numpy as np
+import json
+
+STATIONS_PATH = "D:/2025/UVG/Tesis/repos/backend/api/db/stations.json"
 
 DEMO = True # Utilizar datos demo
 
 app = FastAPI(title="Transmetro ETA API", version="1.0.0")
+
+# === Middlewares ===
+
+origins = [
+    "http://localhost:5173",  # Vite default
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,          # O usa allow_origin_regex para subdominios
+    allow_credentials=True,         # si usarás cookies/sesión
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # === Utilidades ===
@@ -19,7 +38,7 @@ def _startup():
     app.state.boosters = load_model()
     app.state.model_version = "2025-10-25"
     
-@app.post("/ETA", response_model=PredictResponse)
+@app.post("/eta", response_model=PredictResponse)
 def predict(req: PredictRequest):
     
     line = req.target_line
@@ -92,6 +111,77 @@ def predict_trip(req: TripRequest):
         model_version=app.state.model_version,
         n_models=len(app.state.boosters)
     )
+
+@lru_cache
+def _load_stations_by_line() -> dict:
+    with open(STATIONS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+@app.get("/stations", response_model=List[StationEntry])
+def get_stations(
+    line: Optional[str] = None,
+    direction: Optional[Literal["IDA", "VUELTA"]] = None
+):
+    data = _load_stations_by_line()
+    out: List[StationEntry] = []
+
+    for entry in data:
+        if line and entry["line"] != line:
+            continue
+        if direction and entry["direction"] != direction:
+            continue
+        out.append(StationEntry(
+            id=entry["id"],
+            name=entry["name"],
+            line=entry["line"],
+            direction=entry["direction"],
+            lat=entry["lat"],
+            lon=entry["lon"],
+        ))
+
+    return out
+
+@app.get("/stations/line/{line}", response_model=List[StationEntry])
+def get_stations_by_line(line: str) -> List[StationEntry]:
+    data = _load_stations_by_line()
+    out: List[StationEntry] = []
+
+    for entry in data:
+        if entry["line"] != line:
+            continue
+        out.append(StationEntry(
+            id=entry["id"],
+            name=entry["name"],
+            line=entry["line"],
+            direction=entry["direction"],
+            lat=entry["lat"],
+            lon=entry["lon"],
+        ))
+
+    return out
+
+@app.get("/lines", response_model=List[str])
+def get_lines() -> List[str]:
+    data = _load_stations_by_line()
+    lines = set()
+    for entry in data:
+        lines.add(entry["line"])
+    return sorted(list(lines))
+
+@app.get("/stations/{station_id}", response_model=StationEntry)
+def get_station(station_id: int):
+    data = _load_stations_by_line()
+    for entry in data:
+        if entry["id"] == station_id:
+            return StationEntry(
+                id=entry["id"],
+                name=entry["name"],
+                line=entry["line"],
+                direction=entry["direction"],
+                lat=entry["lat"],
+                lon=entry["lon"],
+            )
+    raise HTTPException(404, "Estación no encontrada")
 
 @app.get("/health")
 def health():

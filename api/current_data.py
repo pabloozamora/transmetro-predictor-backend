@@ -32,10 +32,13 @@ def load_latest_data_per_unit(
     """
     if now is None:
         # Ahora en UTC-6 (hora de Guatemala)
-        now = datetime.now(timezone(timedelta(hours=-6)))
+        now = datetime.now(timezone(timedelta(hours=-10)))
         
         # Restar horas para simular diferentes momentos del día
-        now -= timedelta(hours=13)  # Ejemplo: simular 13 horas antes
+        now -= timedelta(hours=7)  # Ejemplo: simular 13 horas antes
+        
+    # Forzar una hora específica para pruebas
+    now = now.replace(hour=14, minute=48, second=0, microsecond=0)
 
     df = pd.read_parquet(DEMO_PATH)
     # Asegura tipos mínimos

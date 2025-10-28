@@ -32,3 +32,11 @@ class TripResponse(BaseModel):
     prediction: float = Field(..., description="Predicción de duración del viaje en segundos")
     model_version: str
     n_models: int
+    
+class StationEntry(BaseModel):
+    id: int
+    name: str
+    line: str
+    direction: str
+    lat: float
+    lon: float
