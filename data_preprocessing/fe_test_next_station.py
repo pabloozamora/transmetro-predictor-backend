@@ -716,6 +716,8 @@ def process_unit_next_station(unit):
     df = df.sort_values(["trip_id","Fecha"])
     trips_viterbi_df = pd.read_csv(TRIPS_VITERBI, dtype={"trip_id": int})
     
+    # Obtener los índices "estables" de los bloques
+    stable_indices = trips_viterbi_df[["idx_start", "idx_end"]].drop_duplicates().reset_index(drop=True)
     
     for trip_id, trip in df.groupby("trip_id", sort=False):
         segs = trips_viterbi_df[trips_viterbi_df["trip_id"] == trip_id].copy()
@@ -742,9 +744,11 @@ def process_unit_next_station(unit):
                 print(f"• Bloque {blk_id}: sin DIR_init, se salta.")
                 continue
 
-            i0 = int(seg.idx_start)
-            i1 = int(seg.idx_end)
+            i0 = int(seg.idx_start) # Inicio del bloque
             
+            # El fin del bloque es el último índice del trip
+            i1 = trip.index[-1]
+
             trip_index_start = seg.t_start
 
             # subset del trip original para este bloque
@@ -806,6 +810,6 @@ if __name__ == "__main__":
     units = [p.name for p in DATA_WITH_FEATURES_DIR.iterdir() if p.is_dir() and p.name != "maps"]
     if not units:
         print(f"No se encontraron unidades en {DATA_WITH_FEATURES_DIR}. Fin.") """
-    units = ['u401', 'u402']
+    units = ['u049', 'u050', 'u051', 'u052', 'u053', 'u055', 'u056', 'u057', 'u059', 'u060', 'u061', 'u062', 'u063', 'u064', 'u066', 'u067', 'u068', 'u069', 'u070', 'u071', 'u074', 'u075', 'u086', 'u087', 'u088', 'u089', 'u090', 'u091', 'u092', 'u093', 'u094', 'u095', 'u096', 'u097', 'u098', 'u099', 'u100', 'u101', 'u102', 'u104', 'u105', 'u106', 'u107', 'u110', 'u111', 'u112', 'u113', 'u114', 'u115', 'u116', 'u117', 'u118', 'u119', 'u120', 'u121', 'u122', 'u123', 'u124', 'u125', 'u127', 'u128', 'u129', 'u130', 'u131', 'u132', 'u133', 'u134', 'u135', 'u136', 'u137', 'u138', 'u139', 'u140', 'u141', 'u142', 'u144', 'u145', 'u146', 'u148', 'u149', 'u150', 'u151', 'u152', 'u153', 'u154', 'u155', 'u156', 'u157', 'u158', 'u159', 'u160', 'u161', 'u201', 'u203', 'u204', 'u205', 'u206', 'u207', 'u208', 'u210', 'u211', 'u212', 'u213', 'u214', 'u215', 'u216', 'u217', 'u218', 'u219', 'u220', 'u221', 'u222', 'u223', 'u224', 'u225', 'u226', 'u227', 'u228', 'u231', 'u232', 'u233', 'u234', 'u235', 'u236', 'u237', 'u238', 'u239', 'u240', 'u241', 'u242', 'u301', 'u302', 'u303', 'u304', 'u305', 'u306', 'u307', 'u308', 'u309', 'u310', 'u401', 'u402', 'uBC232', 'uBC322', 'uBI002', 'uBI003', 'uBI004', 'uBI005', 'uBI006', 'uBI007', 'uBI008', 'uBI009', 'uBI010', 'uBI011', 'uBI012', 'uBI013']
     for unit in units:
         process_unit_next_station(unit)

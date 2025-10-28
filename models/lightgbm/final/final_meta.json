@@ -1,5 +1,5 @@
 {
-    "final_rounds": 860,
+    "final_rounds": 896,
     "params": {
         "objective": "regression",
         "metric": [

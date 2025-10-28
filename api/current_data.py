@@ -78,7 +78,7 @@ def load_latest_data_per_unit(
     age_hours = (anchor_now - latest_per_unit["Fecha"]).dt.total_seconds() / 3600.0
 
     # Conserva últimos pings con edad <= 1h (y descarta negativos por si hubiera “mirada hacia atrás” rara)
-    latest_per_unit = latest_per_unit[(age_hours >= 0) & (age_hours <= 1.0)]
+    # latest_per_unit = latest_per_unit[(age_hours >= 0) & (age_hours <= 1.0)]
 
     # --- Ajuste de señales temporales para “hoy” ---
     latest_per_unit["hour"] = now.hour

@@ -24,6 +24,7 @@ def get_station_sequence(linea: str, dir_: str) -> list[str]:
 
 def find_stations_between(
     candidates: list[str],
+    candidates_dir: str,
     target_station: str,
     target_line: str,
     target_dir: str
@@ -34,45 +35,64 @@ def find_stations_between(
       - IDA/VUELTA: resto del sentido objetivo -> TODO el sentido opuesto -> prefijo del sentido objetivo hasta target.
       - CIRCULAR: resto desde candidata -> prefijo hasta target.
     """
-    seq = get_station_sequence(target_line, target_dir)
-    if not seq or target_station not in seq:
-        return None
+    # Primero, revisar si la línea es circular o bidireccional
+    is_bidirectional = candidates_dir in ("IDA", "VUELTA")
+    
+    # Segundo, determinar si la estación objetivo está en la misma dirección o en la opuesta
+    target_in_same_dir = candidates_dir == target_dir
+    
+    if is_bidirectional:
+        candidates_opposite_dir = "VUELTA" if candidates_dir == "IDA" else "IDA"
+        candidates_opp_dir_sequence = get_station_sequence(target_line, candidates_opposite_dir) # Secuencia en la dirección opuesta a los candidatos
+    
+    candidates_same_dir_sequence = get_station_sequence(target_line, candidates_dir) # Secuencia en la misma dirección que los candidatos
 
-    is_bidirectional = target_dir in ("IDA", "VUELTA")
-    opp_dir = "VUELTA" if target_dir == "IDA" else "IDA"
-    opp_seq = get_station_sequence(target_line, opp_dir) if is_bidirectional else []
-
-    idx_t = seq.index(target_station)
     results: list[list[str]] = []
 
     for st in candidates:
-        # Igual a la target ⇒ nada "entre"
-        if st == target_station:
+        # Igual a la target y en la misma dirección, no hay nada "entre". La estación objetivo es la siguiente.
+        if st == target_station and target_in_same_dir:
             results.append([st])
             continue
+        
+        # Si la línea es bidireccional y la estación objetivo está en la misma dirección que las candidatas
+        if is_bidirectional and target_in_same_dir:
+            
+            idx_target = candidates_same_dir_sequence.index(target_station)
+            idx_candidate = candidates_same_dir_sequence.index(st)
+            
+            # Candidata antes de target
+            if idx_candidate < idx_target:
+                # Agregar las estaciones entre candidata y target
+                segment = [st] + candidates_same_dir_sequence[idx_candidate + 1: idx_target + 1]
+                results.append(segment)
 
-        if st in seq:
-            idx_c = seq.index(st)
-            if idx_c < idx_t:
-                # Misma dirección, candidata antes de target
-                results.append([st] + seq[idx_c + 1 : idx_t] + [target_station])
+            # Candidata después de target
             else:
-                # Misma dirección, candidata después de target ⇒ wrap
-                if is_bidirectional and opp_seq:
-                    # Avanza en el sentido objetivo hasta su final, luego todo el opuesto, luego entra al sentido objetivo desde el inicio hasta target
-                    segment = seq[idx_c + 1 :] + opp_seq + seq[:idx_t]
-                else:
-                    # Circular (o sin opp): wrap interno
-                    segment = seq[idx_c + 1 :] + seq[:idx_t]
-                results.append([st] + segment + [target_station])
+                # Avanza en la dirección actual hasta su final, luego toda la opuesta, luego entra al sentido objetivo desde el inicio hasta target
+                segment = [st] + candidates_same_dir_sequence[idx_candidate + 1 :] + candidates_opp_dir_sequence + candidates_same_dir_sequence[:idx_target + 1]
+                results.append(segment)
 
-        elif is_bidirectional and opp_seq and st in opp_seq:
-            # Candidata en el sentido opuesto
-            idx_c_opp = opp_seq.index(st)
-            # Avanza en el opuesto hasta su final, luego entra al sentido objetivo desde el inicio hasta target
-            segment = opp_seq[idx_c_opp + 1 :] + seq[:idx_t]
-            results.append([st] + segment + [target_station])
-        # Si no está en ningún sentido, se ignora la candidata
+        # Si la estación objetivo está en la dirección opuesta a las candidatas
+        elif is_bidirectional and not target_in_same_dir:
+            # Avanza en la dirección actual hasta su final, luego toda la opuesta, luego entra al sentido objetivo desde el inicio hasta target
+            idx_target = candidates_opp_dir_sequence.index(target_station)
+            idx_candidate = candidates_same_dir_sequence.index(st)
+            segment = [st] + candidates_same_dir_sequence[idx_candidate + 1:] + candidates_opp_dir_sequence[:idx_target + 1]
+            results.append(segment)
+            
+        else:  # Línea circular
+            idx_target = candidates_same_dir_sequence.index(target_station)
+            idx_candidate = candidates_same_dir_sequence.index(st)
+            
+            # Candidata antes de target
+            if idx_candidate < idx_target:
+                segment = [st] + candidates_same_dir_sequence[idx_candidate + 1 : idx_target + 1]
+                results.append(segment)
+            else:
+                # Avanza desde candidata hasta el final, luego desde el inicio hasta target
+                segment = [st] + candidates_same_dir_sequence[idx_candidate + 1 :] + candidates_same_dir_sequence[:idx_target + 1]
+                results.append(segment)
 
     return results or None
 
@@ -106,7 +126,7 @@ def cumulative_ETA(stations_between: list[str], line: str) -> str | None:
             print('ETA from', origin_station, 'to', dest_station, ':', eta_value)
             eta_total += eta_value
             
-    return eta_total if eta_total > 0 else None
+    return eta_total
 
 def get_closest_ETA_for_station(
     line: str,
@@ -127,6 +147,7 @@ def get_closest_ETA_for_station(
         if l == line and d == dir_
     ]
     
+    latest_data_by_line_and_opposite_dir = {}
     if dir_ in ["IDA", "VUELTA"]:
         # Candidatos de la dirección opuesta
         latest_data_by_line_and_opposite_dir = get_latest_data_by_line_and_dir(line, "VUELTA" if dir_ == "IDA" else "IDA")
@@ -139,44 +160,44 @@ def get_closest_ETA_for_station(
         ]
         
     same_dir_valid_candidates = find_stations_between(
-        same_dir_candidate_stations, station, line, dir_
+        candidates=same_dir_candidate_stations,
+        candidates_dir=dir_,
+        target_station=station,
+        target_line=line,
+        target_dir=dir_
     )
     
     opposite_dir_valid_candidates = []
     if dir_ in ["IDA", "VUELTA"]:
+        opposite_dir = "VUELTA" if dir_ == "IDA" else "IDA"
         opposite_dir_valid_candidates = find_stations_between(
-            opposite_dir_candidate_stations, station, line, dir_
+            candidates=opposite_dir_candidate_stations,
+            candidates_dir=opposite_dir,
+            target_station=station,
+            target_line=line,
+            target_dir=dir_
         )
         
-    all_valid_candidates = []
-    if same_dir_valid_candidates:
-        all_valid_candidates.extend(same_dir_valid_candidates)
-        
-    if opposite_dir_valid_candidates:
-        all_valid_candidates.extend(opposite_dir_valid_candidates)
         
     # Si no hay candidatos válidos, regresar None
-    if not all_valid_candidates:
+    if not (same_dir_valid_candidates or opposite_dir_valid_candidates):
         return None
         
     # Calcular ETA acumulado para cada conjunto de estaciones entre y tomar el mínimo
-    best_candidate = None
+    best_candidate_same_dir = None
+    best_candidate_opp_dir = None
     
-    for valid_candidate in all_valid_candidates:
+    # Primero, candidatos en la misma dirección
+    for valid_candidate in same_dir_valid_candidates:
         
         candidate_ETA = 0.0
         
         latest_station = valid_candidate[0]
 
-        # Obtener la información de la estación más cercana (latest_station) de la ruta candidata
-        if latest_station in same_dir_candidate_stations:
-            candidate_direction = dir_
-            latest_station_key = (line, dir_, latest_station)
-            latest_station_info = latest_data_by_line_and_dir.get(latest_station_key)
-        else:
-            candidate_direction = "VUELTA" if dir_ == "IDA" else "IDA"
-            latest_station_key = (line, candidate_direction, latest_station)
-            latest_station_info = latest_data_by_line_and_opposite_dir.get(latest_station_key)
+        candidate_direction = dir_
+        latest_station_key = (line, dir_, latest_station)
+        latest_station_info = latest_data_by_line_and_dir.get(latest_station_key)
+            
         # Predecir el ETA de la primera estación candidata
         latest_ETA_value = predict_boosters(
             boosters,
@@ -190,9 +211,9 @@ def get_closest_ETA_for_station(
         eta_value = cumulative_ETA(valid_candidate, line)
         if eta_value is not None:
             candidate_ETA += eta_value
-            if best_candidate is None or eta_value < best_candidate["cumulative_ETA"]:
+            if best_candidate_same_dir is None or eta_value < best_candidate_same_dir["cumulative_ETA"]:
                 # Obtener placa, dir, linea, lat y lon del latest_station
-                best_candidate = {
+                best_candidate_same_dir = {
                     "unit": latest_station_info.get("Placa"),
                     "line": line,
                     "direction": candidate_direction,
@@ -200,16 +221,77 @@ def get_closest_ETA_for_station(
                     "cumulative_ETA": candidate_ETA,
                     "latitude": latest_station_info.get("Latitud"),
                     "longitude": latest_station_info.get("Longitud"),
+                    "stations_between": valid_candidate
+                }
+                
+    # Segundo, candidatos en la dirección opuesta
+    for valid_candidate in opposite_dir_valid_candidates:
+        
+        candidate_ETA = 0.0
+        
+        latest_station = valid_candidate[0]
+
+        candidate_direction = "VUELTA" if dir_ == "IDA" else "IDA"
+        latest_station_key = (line, candidate_direction, latest_station)
+        latest_station_info = latest_data_by_line_and_opposite_dir.get(latest_station_key)
+            
+        # Predecir el ETA de la primera estación candidata
+        latest_ETA_value = predict_boosters(
+            boosters,
+            latest_station_info
+        )
+        
+        candidate_ETA += latest_ETA_value[0]
+        
+        # Acumular ETAs estadísticos desde la estación candidata hasta la estación objetivo
+        
+        eta_value = cumulative_ETA(valid_candidate, line)
+        if eta_value is not None:
+            candidate_ETA += eta_value
+            if best_candidate_opp_dir is None or eta_value < best_candidate_opp_dir["cumulative_ETA"]:
+                # Obtener placa, dir, linea, lat y lon del latest_station
+                best_candidate_opp_dir = {
+                    "unit": latest_station_info.get("Placa"),
+                    "line": line,
+                    "direction": candidate_direction,
+                    "next_station": latest_station,
+                    "cumulative_ETA": candidate_ETA,
+                    "latitude": latest_station_info.get("Latitud"),
+                    "longitude": latest_station_info.get("Longitud"),
+                    "stations_between": valid_candidate
                 }
                     
-    if best_candidate is not None:
-        result = {
-            "prediction": best_candidate["cumulative_ETA"],
-            "closest_unit": best_candidate
-        }
+    # Comparar ambos mejores candidatos y regresar el mejor
+    if best_candidate_same_dir and best_candidate_opp_dir:
         
+        if best_candidate_same_dir["cumulative_ETA"] <= best_candidate_opp_dir["cumulative_ETA"]:
+            result = {
+                "prediction": best_candidate_same_dir["cumulative_ETA"],
+                "closest_unit": best_candidate_same_dir
+            }
+            return result
+        
+        else:
+            result = {
+                "prediction": best_candidate_opp_dir["cumulative_ETA"],
+                "closest_unit": best_candidate_opp_dir
+            }
+            return result
+        
+    elif best_candidate_same_dir:
+        result = {
+            "prediction": best_candidate_same_dir["cumulative_ETA"],
+            "closest_unit": best_candidate_same_dir
+        }
         return result
-
+    
+    elif best_candidate_opp_dir:
+        result = {
+            "prediction": best_candidate_opp_dir["cumulative_ETA"],
+            "closest_unit": best_candidate_opp_dir
+        }
+        return result
+    
     return None
 
 def get_trip_duration_between_stations(
@@ -260,8 +342,8 @@ def get_trip_duration_between_stations(
     
     return result
 
-# === Ejemplo de uso ===
-if __name__ == "__main__":
+# === Ejemplo de uso trips completos ===
+""" if __name__ == "__main__":
     line = "Linea_12"
     dir_ = "IDA"
     origin_station = "BOLÍVAR DIRECCIÓN CENTRO"
@@ -273,4 +355,13 @@ if __name__ == "__main__":
     if eta is not None:
         print(f"El ETA más cercano para la estación {dest_station} en la línea {line} ({origin_direction}) es: {eta} minutos.")
     else:
-        print(f"No se pudo determinar el ETA para la estación {dest_station} en la línea {line} ({origin_direction}).")
+        print(f"No se pudo determinar el ETA para la estación {dest_station} en la línea {line} ({origin_direction}).") """
+        
+# === Ejemplo de uso ETA simple ===
+if __name__ == "__main__":
+    line = "Linea_13-A"
+    dir_ = "IDA"
+    station = "HANGARES"
+
+    best_candidate = get_closest_ETA_for_station(line, dir_, station, boosters=load_model())
+    print('Best candidate:', best_candidate)
