@@ -159,6 +159,7 @@ def get_closest_ETA_for_station(
             if l == line and d == opposite_dir
         ]
         
+    same_dir_valid_candidates = []
     same_dir_valid_candidates = find_stations_between(
         candidates=same_dir_candidate_stations,
         candidates_dir=dir_,
@@ -188,78 +189,81 @@ def get_closest_ETA_for_station(
     best_candidate_opp_dir = None
     
     # Primero, candidatos en la misma dirección
-    for valid_candidate in same_dir_valid_candidates:
-        
-        candidate_ETA = 0.0
-        
-        latest_station = valid_candidate[0]
-
-        candidate_direction = dir_
-        latest_station_key = (line, dir_, latest_station)
-        latest_station_info = latest_data_by_line_and_dir.get(latest_station_key)
+    if same_dir_valid_candidates:
+        for valid_candidate in same_dir_valid_candidates:
             
-        # Predecir el ETA de la primera estación candidata
-        latest_ETA_value = predict_boosters(
-            boosters,
-            latest_station_info
-        )
-        
-        candidate_ETA += latest_ETA_value[0]
-        
-        # Acumular ETAs estadísticos desde la estación candidata hasta la estación objetivo
-        
-        eta_value = cumulative_ETA(valid_candidate, line)
-        if eta_value is not None:
-            candidate_ETA += eta_value
-            if best_candidate_same_dir is None or eta_value < best_candidate_same_dir["cumulative_ETA"]:
-                # Obtener placa, dir, linea, lat y lon del latest_station
-                best_candidate_same_dir = {
-                    "unit": latest_station_info.get("Placa"),
-                    "line": line,
-                    "direction": candidate_direction,
-                    "next_station": latest_station,
-                    "cumulative_ETA": candidate_ETA,
-                    "latitude": latest_station_info.get("Latitud"),
-                    "longitude": latest_station_info.get("Longitud"),
-                    "stations_between": valid_candidate
-                }
+            candidate_ETA = 0.0
+            
+            latest_station = valid_candidate[0]
+
+            candidate_direction = dir_
+            latest_station_key = (line, dir_, latest_station)
+            latest_station_info = latest_data_by_line_and_dir.get(latest_station_key)
+                
+            # Predecir el ETA de la primera estación candidata
+            latest_ETA_value = predict_boosters(
+                boosters,
+                latest_station_info
+            )
+            
+            candidate_ETA += latest_ETA_value[0]
+            
+            # Acumular ETAs estadísticos desde la estación candidata hasta la estación objetivo
+            
+            eta_value = cumulative_ETA(valid_candidate, line)
+            if eta_value is not None:
+                candidate_ETA += eta_value
+                if best_candidate_same_dir is None or eta_value < best_candidate_same_dir["cumulative_ETA"]:
+                    # Obtener placa, dir, linea, lat y lon del latest_station
+                    best_candidate_same_dir = {
+                        "unit": latest_station_info.get("Placa"),
+                        "line": line,
+                        "direction": candidate_direction,
+                        "next_station": latest_station,
+                        "cumulative_ETA": candidate_ETA,
+                        "latitude": latest_station_info.get("Latitud"),
+                        "longitude": latest_station_info.get("Longitud"),
+                        "stations_between": valid_candidate
+                    }
                 
     # Segundo, candidatos en la dirección opuesta
-    for valid_candidate in opposite_dir_valid_candidates:
+    if opposite_dir_valid_candidates:
         
-        candidate_ETA = 0.0
+        for valid_candidate in opposite_dir_valid_candidates:
         
-        latest_station = valid_candidate[0]
-
-        candidate_direction = "VUELTA" if dir_ == "IDA" else "IDA"
-        latest_station_key = (line, candidate_direction, latest_station)
-        latest_station_info = latest_data_by_line_and_opposite_dir.get(latest_station_key)
+            candidate_ETA = 0.0
             
-        # Predecir el ETA de la primera estación candidata
-        latest_ETA_value = predict_boosters(
-            boosters,
-            latest_station_info
-        )
-        
-        candidate_ETA += latest_ETA_value[0]
-        
-        # Acumular ETAs estadísticos desde la estación candidata hasta la estación objetivo
-        
-        eta_value = cumulative_ETA(valid_candidate, line)
-        if eta_value is not None:
-            candidate_ETA += eta_value
-            if best_candidate_opp_dir is None or eta_value < best_candidate_opp_dir["cumulative_ETA"]:
-                # Obtener placa, dir, linea, lat y lon del latest_station
-                best_candidate_opp_dir = {
-                    "unit": latest_station_info.get("Placa"),
-                    "line": line,
-                    "direction": candidate_direction,
-                    "next_station": latest_station,
-                    "cumulative_ETA": candidate_ETA,
-                    "latitude": latest_station_info.get("Latitud"),
-                    "longitude": latest_station_info.get("Longitud"),
-                    "stations_between": valid_candidate
-                }
+            latest_station = valid_candidate[0]
+
+            candidate_direction = "VUELTA" if dir_ == "IDA" else "IDA"
+            latest_station_key = (line, candidate_direction, latest_station)
+            latest_station_info = latest_data_by_line_and_opposite_dir.get(latest_station_key)
+                
+            # Predecir el ETA de la primera estación candidata
+            latest_ETA_value = predict_boosters(
+                boosters,
+                latest_station_info
+            )
+            
+            candidate_ETA += latest_ETA_value[0]
+            
+            # Acumular ETAs estadísticos desde la estación candidata hasta la estación objetivo
+            
+            eta_value = cumulative_ETA(valid_candidate, line)
+            if eta_value is not None:
+                candidate_ETA += eta_value
+                if best_candidate_opp_dir is None or eta_value < best_candidate_opp_dir["cumulative_ETA"]:
+                    # Obtener placa, dir, linea, lat y lon del latest_station
+                    best_candidate_opp_dir = {
+                        "unit": latest_station_info.get("Placa"),
+                        "line": line,
+                        "direction": candidate_direction,
+                        "next_station": latest_station,
+                        "cumulative_ETA": candidate_ETA,
+                        "latitude": latest_station_info.get("Latitud"),
+                        "longitude": latest_station_info.get("Longitud"),
+                        "stations_between": valid_candidate
+                    }
                     
     # Comparar ambos mejores candidatos y regresar el mejor
     if best_candidate_same_dir and best_candidate_opp_dir:
@@ -317,6 +321,7 @@ def get_trip_duration_between_stations(
     # Luego, encontrar las estaciones entre el origen y destino
     stations_between = find_stations_between(
         candidates=[origin_station],
+        candidates_dir=origin_direction,
         target_line=line,
         target_dir=dest_direction,
         target_station=dest_station,
@@ -359,9 +364,9 @@ def get_trip_duration_between_stations(
         
 # === Ejemplo de uso ETA simple ===
 if __name__ == "__main__":
-    line = "Linea_13-A"
+    line = "Linea_13-B"
     dir_ = "IDA"
-    station = "HANGARES"
+    station = "JUAN PABLO II"
 
     best_candidate = get_closest_ETA_for_station(line, dir_, station, boosters=load_model())
     print('Best candidate:', best_candidate)

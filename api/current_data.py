@@ -7,7 +7,7 @@ import json
 # === Utiliades de carga de datos ===
 
 # Utilizar datos demo
-DEMO_PATH = Path("D:\\2025\\UVG\\Tesis\\repos\\backend\\api\\db\\demo_data_best_day_copy.parquet")
+DEMO_PATH = Path("D:\\2025\\UVG\\Tesis\\repos\\backend\\api\\db\\demo_data_best_day_v2.parquet")
 
 # === Features necesarios para el modelo ===
 
@@ -32,13 +32,15 @@ def load_latest_data_per_unit(
     """
     if now is None:
         # Ahora en UTC-6 (hora de Guatemala)
-        now = datetime.now(timezone(timedelta(hours=-10)))
+        now = datetime.now(timezone(timedelta(hours=-6)))
         
         # Restar horas para simular diferentes momentos del día
         now -= timedelta(hours=7)  # Ejemplo: simular 13 horas antes
         
+        print('NOW: ', now)
+        
     # Forzar una hora específica para pruebas
-    now = now.replace(hour=14, minute=48, second=0, microsecond=0)
+    now = now.replace(hour=19, minute=38, second=0, microsecond=0)
 
     df = pd.read_parquet(DEMO_PATH)
     # Asegura tipos mínimos
