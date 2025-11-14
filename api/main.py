@@ -24,8 +24,8 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # O usa allow_origin_regex para subdominios
-    allow_credentials=True,         # si usarás cookies/sesión
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,7 +62,7 @@ def predict(req: PredictRequest):
     )
     
     if not result:
-        raise HTTPException(404, "No hay unidades operativas para la línea dada.")
+        raise HTTPException(status_code=404, detail=f"Actualmente no hay unidades operando en la línea {line}.")
     
     return PredictResponse(
         prediction=result["prediction"],
@@ -103,7 +103,7 @@ def predict_trip(req: TripRequest):
     )
 
     if result is None:
-        raise HTTPException(404, "No se pudo calcular la duración del viaje.")
+        raise HTTPException(404, f"Actualmente no hay unidades operando en la línea {line}.")
 
     return TripResponse(
         prediction=result["prediction"],

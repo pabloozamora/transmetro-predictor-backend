@@ -35,12 +35,13 @@ def load_latest_data_per_unit(
         now = datetime.now(timezone(timedelta(hours=-6)))
         
         # Restar horas para simular diferentes momentos del día
-        now -= timedelta(hours=7)  # Ejemplo: simular 13 horas antes
+        # now -= timedelta(hours=7)  # Ejemplo: simular 13 horas antes
         
         print('NOW: ', now)
         
     # Forzar una hora específica para pruebas
-    now = now.replace(hour=19, minute=38, second=0, microsecond=0)
+    now = now.replace(hour=10)
+    #now = now.replace(hour=14)
 
     df = pd.read_parquet(DEMO_PATH)
     # Asegura tipos mínimos
@@ -80,7 +81,7 @@ def load_latest_data_per_unit(
     age_hours = (anchor_now - latest_per_unit["Fecha"]).dt.total_seconds() / 3600.0
 
     # Conserva últimos pings con edad <= 1h (y descarta negativos por si hubiera “mirada hacia atrás” rara)
-    # latest_per_unit = latest_per_unit[(age_hours >= 0) & (age_hours <= 1.0)]
+    latest_per_unit = latest_per_unit[(age_hours >= 0) & (age_hours <= 1.0)]
 
     # --- Ajuste de señales temporales para “hoy” ---
     latest_per_unit["hour"] = now.hour

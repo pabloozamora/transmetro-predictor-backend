@@ -27,7 +27,8 @@ def df_from_latest_dict(data: dict) -> pd.DataFrame:
     y tipos esperados por el modelo. NO renombra columnas.
     """
     
-    print('Datos recibidos para predicción:', data)
+    print('\n--- Unidad: ', data.get("Placa"))
+    print('Datos recibidos para predicción a estación más cercana:', data)
     
     if not isinstance(data, dict):
         raise TypeError("data debe ser un dict con un solo registro")
@@ -68,5 +69,5 @@ def predict_boosters(boosters: List[lgb.Booster], data: dict) -> np.ndarray:
     
     # No devolver negativos
     prediction = np.maximum(prediction, 0.0)
-    print('Predicción a estación más cercana:', prediction)
+    print(f'Predicción a próxima estación teórica ({data.get("proxima_est_teorica")}): {prediction}\n')
     return prediction

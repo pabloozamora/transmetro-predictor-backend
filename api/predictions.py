@@ -123,7 +123,7 @@ def cumulative_ETA(stations_between: list[str], line: str) -> str | None:
         
         if not eta_row.empty:
             eta_value = eta_row["ETA_sugerido_s"].values[0]
-            print('ETA from', origin_station, 'to', dest_station, ':', eta_value)
+            print('ETA histórico desde', origin_station, 'hasta', dest_station, ':', eta_value)
             eta_total += eta_value
             
     return eta_total
@@ -159,6 +159,16 @@ def get_closest_ETA_for_station(
             if l == line and d == opposite_dir
         ]
         
+    if latest_data_by_line_and_dir:
+        print('\n=== Unidades disponibles para ', line, 'dirección', dir_, '===')
+        for key, value in latest_data_by_line_and_dir.items():
+            print('Unidad:', value.get("Placa"), 'Último registro:', value.get("Fecha"), 'Próxima estación:', value.get("proxima_est_teorica"))
+            
+    if latest_data_by_line_and_opposite_dir:
+        print('\n=== Unidades disponibles para', line, 'dirección opuesta ===')
+        for key, value in latest_data_by_line_and_opposite_dir.items():
+            print('Unidad:', value.get("Placa"), 'Último registro:', value.get("Fecha"), 'Próxima estación:', value.get("proxima_est_teorica"))
+        
     same_dir_valid_candidates = []
     same_dir_valid_candidates = find_stations_between(
         candidates=same_dir_candidate_stations,
@@ -167,7 +177,7 @@ def get_closest_ETA_for_station(
         target_line=line,
         target_dir=dir_
     )
-    
+
     opposite_dir_valid_candidates = []
     if dir_ in ["IDA", "VUELTA"]:
         opposite_dir = "VUELTA" if dir_ == "IDA" else "IDA"
@@ -217,18 +227,20 @@ def get_closest_ETA_for_station(
                     # Obtener placa, dir, linea, lat y lon del latest_station
                     best_candidate_same_dir = {
                         "unit": latest_station_info.get("Placa"),
+                        "latest_timestamp": latest_station_info.get("Fecha"),
                         "line": line,
                         "direction": candidate_direction,
                         "next_station": latest_station,
+                        "next_station_ETA": latest_ETA_value[0],
                         "cumulative_ETA": candidate_ETA,
                         "latitude": latest_station_info.get("Latitud"),
                         "longitude": latest_station_info.get("Longitud"),
                         "stations_between": valid_candidate
                     }
+                print('Para la unidad', latest_station_info.get("Placa"), 'el ETA acumulado es:', candidate_ETA)
                 
     # Segundo, candidatos en la dirección opuesta
     if opposite_dir_valid_candidates:
-        
         for valid_candidate in opposite_dir_valid_candidates:
         
             candidate_ETA = 0.0
@@ -256,14 +268,17 @@ def get_closest_ETA_for_station(
                     # Obtener placa, dir, linea, lat y lon del latest_station
                     best_candidate_opp_dir = {
                         "unit": latest_station_info.get("Placa"),
+                        "latest_timestamp": latest_station_info.get("Fecha"),
                         "line": line,
                         "direction": candidate_direction,
                         "next_station": latest_station,
+                        "next_station_ETA": latest_ETA_value[0],
                         "cumulative_ETA": candidate_ETA,
                         "latitude": latest_station_info.get("Latitud"),
                         "longitude": latest_station_info.get("Longitud"),
                         "stations_between": valid_candidate
                     }
+                print('Para la unidad', latest_station_info.get("Placa"), 'el ETA acumulado es:', candidate_ETA)
                     
     # Comparar ambos mejores candidatos y regresar el mejor
     if best_candidate_same_dir and best_candidate_opp_dir:
@@ -273,6 +288,7 @@ def get_closest_ETA_for_station(
                 "prediction": best_candidate_same_dir["cumulative_ETA"],
                 "closest_unit": best_candidate_same_dir
             }
+            print('\nEl mejor candidato es la unidad:', best_candidate_same_dir["unit"], 'con un ETA total de:', best_candidate_same_dir["cumulative_ETA"])
             return result
         
         else:
@@ -280,6 +296,7 @@ def get_closest_ETA_for_station(
                 "prediction": best_candidate_opp_dir["cumulative_ETA"],
                 "closest_unit": best_candidate_opp_dir
             }
+            print('\nEl mejor candidato es la unidad:', best_candidate_opp_dir["unit"], 'con un ETA total de:', best_candidate_opp_dir["cumulative_ETA"])
             return result
         
     elif best_candidate_same_dir:
@@ -287,6 +304,7 @@ def get_closest_ETA_for_station(
             "prediction": best_candidate_same_dir["cumulative_ETA"],
             "closest_unit": best_candidate_same_dir
         }
+        print('\nEl mejor candidato es la unidad:', best_candidate_same_dir["unit"], 'con un ETA total de:', best_candidate_same_dir["cumulative_ETA"])
         return result
     
     elif best_candidate_opp_dir:
@@ -294,6 +312,7 @@ def get_closest_ETA_for_station(
             "prediction": best_candidate_opp_dir["cumulative_ETA"],
             "closest_unit": best_candidate_opp_dir
         }
+        print('\nEl mejor candidato es la unidad:', best_candidate_opp_dir["unit"], 'con un ETA total de:', best_candidate_opp_dir["cumulative_ETA"])
         return result
     
     return None
@@ -310,7 +329,6 @@ def get_trip_duration_between_stations(
     """
     
     # Primero, estimar el ETA a la estación más cercana al origen
-
     closest_eta = get_closest_ETA_for_station(line, origin_direction, origin_station, boosters=load_model())
     if closest_eta is None:
         return None
@@ -318,6 +336,7 @@ def get_trip_duration_between_stations(
     current_ETA = closest_eta["prediction"]
     best_candidate = closest_eta["closest_unit"]
     
+    print('\n === Calculando duración del viaje entre estaciones === ')
     # Luego, encontrar las estaciones entre el origen y destino
     stations_between = find_stations_between(
         candidates=[origin_station],
@@ -364,9 +383,9 @@ def get_trip_duration_between_stations(
         
 # === Ejemplo de uso ETA simple ===
 if __name__ == "__main__":
-    line = "Linea_13-B"
-    dir_ = "IDA"
-    station = "JUAN PABLO II"
+    line = "Linea_13-A"
+    dir_ = "VUELTA"
+    station = "MONTÚFAR"
 
     best_candidate = get_closest_ETA_for_station(line, dir_, station, boosters=load_model())
     print('Best candidate:', best_candidate)
