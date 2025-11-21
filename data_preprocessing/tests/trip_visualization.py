@@ -1,3 +1,6 @@
+'''Script para crear un mapa interactivo con polilíneas que representan las rutas de los viajes
+hasta el timestamp de inicio (t_start_ts) de cada viaje.'''
+
 import pandas as pd
 import folium
 from datetime import datetime
@@ -5,81 +8,81 @@ import numpy as np
 
 def create_trip_polylines_map():
     """
-    Create a folium map with polylines showing GPS coordinates for each trip
-    up to the start timestamp (t_start_ts) from u158_trip_routes.csv
+    Crear un mapa interactivo con polilíneas que representan las rutas de los viajes
+    hasta el timestamp de inicio (t_start_ts) de cada viaje.
     """
     
-    print("Loading trip routes data...")
-    # Load the trip routes data
+    print("Cargando datos de rutas de viajes...")
+    # Cargar los datos de rutas de viajes
     trip_routes = pd.read_csv(r'd:\2025\UVG\Tesis\repos\backend\data_with_features\u158\u158_trip_routes.csv')
     
-    print(f"Found {len(trip_routes)} trips in the routes data")
+    print(f"Se encontraron {len(trip_routes)} viajes en los datos de rutas")
     
-    # Load the clean trips data in chunks to handle the large file
-    print("Loading clean trips data...")
+    # Cargar los datos de viajes limpios en chunks para manejar el archivo grande
+    print("Cargando datos de viajes limpios...")
     
-    # Convert t_start_ts to datetime for easier comparison
+    # Convertir t_start_ts a datetime para facilitar la comparación
     trip_routes['t_start_ts'] = pd.to_datetime(trip_routes['t_start_ts'])
     
-    # Initialize the map centered on Guatemala City (approximate location)
+    # Inicializar el mapa centrado en Ciudad de Guatemala (ubicación aproximada)
     center_lat = 14.6349
     center_lon = -90.5069
     m = folium.Map(location=[center_lat, center_lon], zoom_start=12)
     
-    # Color palette for different trips
+    # Paleta de colores para diferentes viajes
     colors = ['red', 'blue', 'green', 'purple', 'orange', 'darkred', 'lightred', 
               'beige', 'darkblue', 'darkgreen', 'cadetblue', 'darkpurple', 'white', 
               'pink', 'lightblue', 'lightgreen', 'gray', 'black', 'lightgray']
     
-    # Process each trip
+    # Procesar cada viaje
     for idx, trip_row in trip_routes.iterrows():
         trip_id = trip_row['trip_id']
         t_start_ts = trip_row['t_start_ts']
         linea = trip_row['LINEA']
         direccion = trip_row['DIR']
         
-        print(f"Processing trip {trip_id} ({linea} - {direccion}) - Start: {t_start_ts}")
+        print(f"Procesando viaje {trip_id} ({linea} - {direccion}) - Inicio: {t_start_ts}")
         
-        # Read the clean trips data for this specific trip
-        # Using chunked reading to handle large file
+        # Leer los datos de viajes limpios para este viaje específico
+        # Usando lectura por chunks para manejar archivos grandes
         trip_points = []
         chunk_size = 10000
         
         for chunk in pd.read_csv(r'd:\2025\UVG\Tesis\repos\backend\clean_data\u158\u158_clean_trips.csv', 
                                 chunksize=chunk_size):
-            # Filter for this specific trip
+            # Filtrar para este viaje específico
             trip_chunk = chunk[chunk['trip_id'] == trip_id].copy()
             
             if not trip_chunk.empty:
-                # Convert Fecha to datetime
+                # Convertir Fecha a datetime
                 trip_chunk['Fecha'] = pd.to_datetime(trip_chunk['Fecha'])
                 
-                # Filter points up to t_start_ts
+                # Filtrar puntos hasta t_start_ts
                 filtered_chunk = trip_chunk[trip_chunk['Fecha'] <= t_start_ts]
                 
                 if not filtered_chunk.empty:
-                    # Extract coordinates
+                    # Extraer coordenadas
                     coords = filtered_chunk[['Latitud', 'Longitud', 'Fecha']].values
                     trip_points.extend(coords)
         
         if trip_points:
-            # Sort by timestamp to ensure correct order
+            # Ordenar por timestamp para asegurar el orden correcto
             trip_points = sorted(trip_points, key=lambda x: x[2])
             
-            # Extract just the lat/lon coordinates
+            # Extraer solo las coordenadas lat/lon
             coordinates = [[point[0], point[1]] for point in trip_points]
             
-            # Skip if we don't have enough points for a meaningful polyline
+            # Omitir si no tenemos suficientes puntos para una polilínea significativa
             if len(coordinates) < 2:
-                print(f"  Trip {trip_id}: Not enough points ({len(coordinates)})")
+                print(f"  Trip {trip_id}: No hay suficientes puntos ({len(coordinates)})")
                 continue
             
-            print(f"  Trip {trip_id}: Found {len(coordinates)} GPS points")
+            print(f"  Trip {trip_id}: Se encontraron {len(coordinates)} puntos GPS")
             
-            # Choose color for this trip
+            # Elegir color para este viaje
             color = colors[idx % len(colors)]
             
-            # Create polyline
+            # Crear polilínea
             polyline = folium.PolyLine(
                 locations=coordinates,
                 color=color,
@@ -88,29 +91,29 @@ def create_trip_polylines_map():
                 popup=f"Trip {trip_id} - {linea} ({direccion})<br>Points: {len(coordinates)}<br>Start: {t_start_ts}"
             )
             
-            # Add to map
+            # Agregar al mapa
             polyline.add_to(m)
             
-            # Add start marker
+            # Agregar marcador de inicio
             start_marker = folium.Marker(
                 location=coordinates[0],
-                popup=f"Start - Trip {trip_id}<br>{linea} ({direccion})<br>{t_start_ts}",
+                popup=f"Inicio - Viaje {trip_id}<br>{linea} ({direccion})<br>{t_start_ts}",
                 icon=folium.Icon(color='green', icon='play')
             )
             start_marker.add_to(m)
             
-            # Add end marker
+            # Agregar marcador de fin
             end_marker = folium.Marker(
                 location=coordinates[-1],
-                popup=f"End (t_start_ts) - Trip {trip_id}<br>{linea} ({direccion})<br>{trip_points[-1][2]}",
+                popup=f"Fin (t_start_ts) - Viaje {trip_id}<br>{linea} ({direccion})<br>{trip_points[-1][2]}",
                 icon=folium.Icon(color='red', icon='stop')
             )
             end_marker.add_to(m)
         
         else:
-            print(f"  Trip {trip_id}: No GPS points found up to t_start_ts")
+            print(f"  Viaje {trip_id}: No se encontraron puntos GPS hasta t_start_ts")
     
-    # Add a legend
+    # Agregar una leyenda
     legend_html = '''
     <div style="position: fixed; 
                 bottom: 50px; left: 50px; width: 200px; height: 120px; 
@@ -125,12 +128,12 @@ def create_trip_polylines_map():
     '''
     m.get_root().html.add_child(folium.Element(legend_html))
     
-    # Save the map
+    # Guardar el mapa
     output_file = r'd:\2025\UVG\Tesis\repos\backend\u158_trip_polylines_map.html'
     m.save(output_file)
     
-    print(f"\nMap saved to: {output_file}")
-    print("You can open this file in a web browser to view the interactive map.")
+    print(f"\nMapa guardado en: {output_file}")
+    print("Puedes abrir este archivo en un navegador web para ver el mapa interactivo.")
     
     return output_file
 
