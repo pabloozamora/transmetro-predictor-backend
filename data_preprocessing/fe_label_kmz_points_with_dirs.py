@@ -1,3 +1,5 @@
+'''Funciones para etiquetar puntos GPS con dirección y distancia recorrida sobre rutas definidas a partir de estaciones.'''
+
 import pandas as pd
 import numpy as np
 import math
@@ -46,11 +48,11 @@ def label_points_with_dir(points_df, geoms, linea,
                             dir_ida="IDA", dir_vta="VUELTA",
                             switch_penalty_m=30.0, eps_s=5.0):
     """
-    points_df: DataFrame con columnas LAT, LON (y opcionalmente el orden original)
-    geoms: tus rutas coarse construidas con estaciones (ya existentes)
+    points_df: DataFrame con columnas LAT, LON
+    geoms: Rutas coarse construidas con estaciones (ya existentes)
     Retorna: points_df con columnas: DIR, s_in_dir, d_to_dir, order_in_dir
     """
-    assert (linea, dir_ida) in geoms and (linea, dir_vta) in geoms, "Falta geometría coarse de IDA/VUELTA"
+    assert (linea, dir_ida) in geoms and (linea, dir_vta) in geoms, "Falta geometría de IDA/VUELTA"
     rI = geoms[(linea, dir_ida)]
     rV = geoms[(linea, dir_vta)]
 

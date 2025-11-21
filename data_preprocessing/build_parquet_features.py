@@ -1,3 +1,5 @@
+'''Script para construir features adicionales y guardar datasets finales en formato Parquet.'''
+
 from pathlib import Path
 import pandas as pd, numpy as np, gc
 

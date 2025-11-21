@@ -1,3 +1,6 @@
+'''Script de Ingeniería de características para calcular el tiempo de permanencia (dwell time) basado en la falta de avance
+en latitud/longitud, convertido a metros.'''
+
 import pandas as pd
 import numpy as np
 from pathlib import Path

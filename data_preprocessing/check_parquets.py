@@ -1,3 +1,6 @@
+'''Script para verificar que los archivos Parquet generados coincidan en número de filas
+con el filtrado esperado desde los CSVs originales.'''
+
 import pandas as pd
 import pyarrow.dataset as ds
 import pyarrow.compute as pc

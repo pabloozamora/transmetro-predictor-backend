@@ -12,10 +12,10 @@ ORDER_PATH = Path("D:\\2025\\UVG\\Tesis\\repos\\backend\\api\\db\\station_order_
 with open(ORDER_PATH, "r", encoding="utf-8") as f:
     STATION_ORDER = json.load(f)
     
-# Estadísticas predefinidas de ETA entre estaciones:
+# Path de estadísticas históricas de ETA entre estaciones:
 ETA_STATS_PATH = Path("D:\\2025\\UVG\\Tesis\\repos\\backend\\models\\eta_tramos_robusto.csv")
 
-# Cargar estadísticas de ETA entre estaciones
+# Cargar estadísticas históricas de ETA entre estaciones
 ETA_STATS_DF = pd.read_csv(ETA_STATS_PATH)
 
 def get_station_sequence(linea: str, dir_: str) -> list[str]:
@@ -365,27 +365,3 @@ def get_trip_duration_between_stations(
     }
     
     return result
-
-# === Ejemplo de uso trips completos ===
-""" if __name__ == "__main__":
-    line = "Linea_12"
-    dir_ = "IDA"
-    origin_station = "BOLÍVAR DIRECCIÓN CENTRO"
-    origin_direction = "IDA"
-    dest_station = "PLAZA BARRIOS"
-    dest_direction = "VUELTA"
-
-    eta = get_trip_duration_between_stations(line, origin_station, origin_direction, dest_station, dest_direction)
-    if eta is not None:
-        print(f"El ETA más cercano para la estación {dest_station} en la línea {line} ({origin_direction}) es: {eta} minutos.")
-    else:
-        print(f"No se pudo determinar el ETA para la estación {dest_station} en la línea {line} ({origin_direction}).") """
-        
-# === Ejemplo de uso ETA simple ===
-if __name__ == "__main__":
-    line = "Linea_13-A"
-    dir_ = "VUELTA"
-    station = "MONTÚFAR"
-
-    best_candidate = get_closest_ETA_for_station(line, dir_, station, boosters=load_model())
-    print('Best candidate:', best_candidate)

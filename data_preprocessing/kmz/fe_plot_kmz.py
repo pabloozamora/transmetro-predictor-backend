@@ -1,3 +1,6 @@
+'''Script para extraer y graficar las polilíneas de un archivo KMZ específico.
+Genera un archivo CSV con los puntos extraídos y un archivo HTML con la visualización.'''
+
 import zipfile, io, xml.etree.ElementTree as ET, pandas as pd, numpy as np
 from pathlib import Path
 

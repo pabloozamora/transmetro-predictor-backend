@@ -7,7 +7,7 @@ import json
 # === Utiliades de carga de datos ===
 
 # Utilizar datos demo
-DEMO_PATH = Path("D:\\2025\\UVG\\Tesis\\repos\\backend\\api\\db\\demo_data_best_day_v2.parquet")
+DEMO_PATH = Path("D:\\2025\\UVG\\Tesis\\repos\\backend\\api\\db\\demo_data.parquet")
 
 # === Features necesarios para el modelo ===
 
@@ -44,11 +44,11 @@ def load_latest_data_per_unit(
     #now = now.replace(hour=14)
 
     df = pd.read_parquet(DEMO_PATH)
-    # Asegura tipos mínimos
+    # Asegurar tipos mínimos
     df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
     df = df.dropna(subset=["Fecha", "Placa"])
 
-    # Normaliza strings (evitar problemas de tipo)
+    # Normalizar strings (evitar problemas de tipo)
     for c in ["Placa","LINEA","DIR","proxima_est_teorica"]:
         if c in df.columns:
             df[c] = df[c].astype("string")
@@ -89,8 +89,8 @@ def load_latest_data_per_unit(
     latest_per_unit["is_weekend"] = (latest_per_unit["dow"] >= 5).astype(int)
     latest_per_unit["is_peak"] = latest_per_unit["hour"].apply(_is_peak).astype(int)
 
-    # --- Asegura columnas de FEATURES y tipos numéricos ---
-    # Si falta alguna columna, crea con default razonable
+    # --- Asegurar columnas de FEATURES y tipos numéricos ---
+    # Si falta alguna columna, crear con default razonable
     defaults = {
         "Latitud": 0.0,
         "Longitud": 0.0,
